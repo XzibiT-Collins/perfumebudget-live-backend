@@ -1,6 +1,7 @@
 package com.example.perfume_budget.config.ws;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.server.ServerHttpRequest;
 import org.springframework.http.server.ServerHttpResponse;
@@ -15,6 +16,9 @@ import org.springframework.web.socket.server.HandshakeInterceptor;
 
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
+
+import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 
 @Configuration
@@ -23,13 +27,13 @@ import java.util.Map;
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     private final AuthChannelInterceptor authChannelInterceptor;
 
+    @Value("${cors.allowed-origins}")
+    private String allowedOrigins;
+
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry){
         registry.addEndpoint("/ws")
-                .setAllowedOrigins("http://localhost:3000",
-                        "http://localhost:8080",
-                        "http://localhost:4200",
-                        "https://perfume-budget-gs-fe.vercel.app")
+                .setAllowedOrigins(allowedOrigins)
                 .addInterceptors(new HandshakeInterceptor() {
                     @Override
                     public boolean beforeHandshake(ServerHttpRequest request, ServerHttpResponse response, WebSocketHandler wsHandler, Map<String, Object> attributes) {
