@@ -176,7 +176,7 @@ curl -X GET http://localhost:8080/api/protected-endpoint \
 - **Token Expiration:**
   - Access Token: 1 hour
   - Refresh Token: 7 days
-- **CORS:** Configured for localhost:3000, localhost:4200, localhost:8080
+- **CORS:** Controlled by `CORS_ALLOWED_ORIGINS`, `CORS_ALLOWED_METHODS`, and `CORS_ALLOWED_HEADERS`
 - **CSRF:** Disabled (appropriate for stateless APIs)
 
 ### Production Recommendations
@@ -199,7 +199,9 @@ curl -X GET http://localhost:8080/api/protected-endpoint \
 3. **Configure CORS for production:**
    ```properties
    # Add your production domains
-   cors.allowed-origins=https://yourdomain.com,https://www.yourdomain.com
+   CORS_ALLOWED_ORIGINS=https://yourdomain.com,https://www.yourdomain.com
+   CORS_ALLOWED_METHODS=GET,POST,PUT,PATCH,DELETE,OPTIONS
+   CORS_ALLOWED_HEADERS=Authorization,Content-Type,X-Requested-With
    ```
 
 4. **Add rate limiting** to prevent abuse

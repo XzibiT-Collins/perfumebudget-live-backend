@@ -27,6 +27,9 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import org.springframework.beans.factory.annotation.Value;
+
+import java.util.Arrays;
 import java.util.List;
 
 @RequiredArgsConstructor
@@ -43,6 +46,15 @@ public class SecurityConfig {
     private final OAuth2AuthenticationSuccessHandler oAuth2AuthenticationSuccessHandler;
     private final OAuth2AuthenticationFailureHandler oAuth2AuthenticationFailureHandler;
     private final SiteVisitFilter siteVisitFilter;
+
+    @Value("${cors.allowed-origins}")
+    private String allowedOrigins;
+
+    @Value("${cors.allowed-methods}")
+    private String allowedMethods;
+
+    @Value("${cors.allowed-headers}")
+    private String allowedHeaders;
 
     @Bean
     public PasswordEncoder passwordEncoder(){
@@ -102,17 +114,19 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(List.of(
-            "http://localhost:3000", 
-            "http://localhost:8080", 
-            "http://localhost:4200",
-            "https://perfume-budget-gs-fe.vercel.app"
-        ));
-        configuration.setAllowedMethods(List.of("*"));
-        configuration.setAllowedHeaders(List.of("*"));
+        configuration.setAllowedOrigins(csvToList(allowedOrigins));
+        configuration.setAllowedMethods(csvToList(allowedMethods));
+        configuration.setAllowedHeaders(csvToList(allowedHeaders));
         configuration.setAllowCredentials(true);
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
         return source;
+    }
+
+    private List<String> csvToList(String value) {
+        return Arrays.stream(value.split(","))
+                .map(String::trim)
+                .filter(entry -> !entry.isBlank())
+                .toList();
     }
 }
