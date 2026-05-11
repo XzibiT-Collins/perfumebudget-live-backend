@@ -66,6 +66,8 @@ class ProductServiceImplTest {
     private BookkeepingService bookkeepingService;
     @Mock
     private InventoryManagementService inventoryManagementService;
+    @Mock
+    private ProductCatalogCacheService productCatalogCacheService;
 
     @InjectMocks
     private ProductServiceImpl productService;
@@ -258,13 +260,52 @@ class ProductServiceImplTest {
     @Test
     void getProductDetailsPage_ForAdmin_DoesNotPublishViewEvent() {
         User admin = User.builder().roles(UserRole.ADMIN).build();
-        when(productRepository.findBySlugAndIsActiveTrueAndIsEnlistedTrue("perfume-a")).thenReturn(Optional.of(baseProduct));
         when(authUserUtil.getCurrentUser()).thenReturn(admin);
+        ProductDetailsPageResponse cachedResponse = ProductDetailsPageResponse.builder()
+                .productId(1L)
+                .slug("perfume-a")
+                .productName("Perfume A")
+                .productShortDescription("Short description")
+                .productDescription("Detailed description")
+                .productImageUrl("http://image.com/a.jpg")
+                .category("Fragrance")
+                .sellingPrice("USD 100.00")
+                .isOutOfStock(false)
+                .isFeatured(false)
+                .build();
+        when(productCatalogCacheService.getProductDetailsPage("perfume-a")).thenReturn(cachedResponse);
 
         ProductDetailsPageResponse result = productService.getProductDetailsPage("perfume-a");
 
         assertEquals("perfume-a", result.slug());
+        verify(productCatalogCacheService).getProductDetailsPage("perfume-a");
         verify(eventPublisher, never()).publishEvent(any(ViewCountEvent.class));
+    }
+
+    @Test
+    void getProductDetailsPage_ForCustomer_PublishesViewEventOnEachCall() {
+        when(authUserUtil.getCurrentUser()).thenReturn(null);
+        ProductDetailsPageResponse cachedResponse = ProductDetailsPageResponse.builder()
+                .productId(1L)
+                .slug("perfume-a")
+                .productName("Perfume A")
+                .productShortDescription("Short description")
+                .productDescription("Detailed description")
+                .productImageUrl("http://image.com/a.jpg")
+                .category("Fragrance")
+                .sellingPrice("USD 100.00")
+                .isOutOfStock(false)
+                .isFeatured(false)
+                .build();
+        when(productCatalogCacheService.getProductDetailsPage("perfume-a")).thenReturn(cachedResponse);
+
+        ProductDetailsPageResponse first = productService.getProductDetailsPage("perfume-a");
+        ProductDetailsPageResponse second = productService.getProductDetailsPage("perfume-a");
+
+        assertEquals("perfume-a", first.slug());
+        assertEquals("perfume-a", second.slug());
+        verify(productCatalogCacheService, times(2)).getProductDetailsPage("perfume-a");
+        verify(eventPublisher, times(2)).publishEvent(any(ViewCountEvent.class));
     }
 
     @Test
@@ -357,7 +398,8 @@ class ProductServiceImplTest {
 
     @Test
     void getProductDetailsPage_UnenlistedProduct_Throws() {
-        when(productRepository.findBySlugAndIsActiveTrueAndIsEnlistedTrue("perfume-a")).thenReturn(Optional.empty());
+        when(productCatalogCacheService.getProductDetailsPage("perfume-a"))
+                .thenThrow(new ResourceNotFoundException("Product not Found."));
 
         assertThrows(ResourceNotFoundException.class, () -> productService.getProductDetailsPage("perfume-a"));
     }
@@ -377,29 +419,24 @@ class ProductServiceImplTest {
 
     @Test
     void getFeaturedProducts_ReturnsMappedFeaturedProducts() {
-        Product featured = Product.builder()
-                .id(2L)
-                .name("Featured Perfume")
+        ProductListing featured = ProductListing.builder()
+                .productId(2L)
+                .productName("Featured Perfume")
                 .slug("featured-perfume")
-                .price(new Money(new BigDecimal("150.00"), CurrencyCode.USD))
-                .stockQuantity(5)
-                .isActive(true)
-                .isEnlisted(true)
-                .isFeatured(true)
                 .build();
-        when(productRepository.findTop8ByIsActiveTrueAndIsEnlistedTrueAndIsFeaturedTrue())
+        when(productCatalogCacheService.getFeaturedProducts())
                 .thenReturn(List.of(featured));
 
         List<ProductListing> result = productService.getFeaturedProducts();
 
         assertEquals(1, result.size());
         assertEquals("Featured Perfume", result.get(0).productName());
-        verify(productRepository).findTop8ByIsActiveTrueAndIsEnlistedTrueAndIsFeaturedTrue();
+        verify(productCatalogCacheService).getFeaturedProducts();
     }
 
     @Test
     void getFeaturedProducts_ReturnsEmptyList_WhenNoneExist() {
-        when(productRepository.findTop8ByIsActiveTrueAndIsEnlistedTrueAndIsFeaturedTrue())
+        when(productCatalogCacheService.getFeaturedProducts())
                 .thenReturn(List.of());
 
         List<ProductListing> result = productService.getFeaturedProducts();
@@ -409,19 +446,14 @@ class ProductServiceImplTest {
 
     @Test
     void getFeaturedProducts_ReturnsAtMost8Products() {
-        List<Product> eightProducts = java.util.stream.IntStream.rangeClosed(1, 8)
-                .mapToObj(i -> Product.builder()
-                        .id((long) i)
-                        .name("Featured " + i)
+        List<ProductListing> eightProducts = java.util.stream.IntStream.rangeClosed(1, 8)
+                .mapToObj(i -> ProductListing.builder()
+                        .productId((long) i)
+                        .productName("Featured " + i)
                         .slug("featured-" + i)
-                        .price(new Money(new BigDecimal("100.00"), CurrencyCode.USD))
-                        .stockQuantity(1)
-                        .isActive(true)
-                        .isEnlisted(true)
-                        .isFeatured(true)
                         .build())
                 .toList();
-        when(productRepository.findTop8ByIsActiveTrueAndIsEnlistedTrueAndIsFeaturedTrue())
+        when(productCatalogCacheService.getFeaturedProducts())
                 .thenReturn(eightProducts);
 
         List<ProductListing> result = productService.getFeaturedProducts();

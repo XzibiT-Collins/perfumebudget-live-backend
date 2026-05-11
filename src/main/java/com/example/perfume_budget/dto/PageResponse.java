@@ -2,6 +2,7 @@ package com.example.perfume_budget.dto;
 
 import lombok.Builder;
 
+import java.io.Serializable;
 import java.util.List;
 
 @Builder
@@ -15,5 +16,6 @@ public record PageResponse<T>(
         boolean isFirst,
         boolean isLast,
         boolean isEmpty
-) {
+) implements Serializable {
+    private static final long serialVersionUID = 1L;
 }

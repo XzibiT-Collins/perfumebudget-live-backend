@@ -111,4 +111,16 @@ class WebhookProcessorImplTest {
 
         verify(paymentRepository, never()).save(any());
     }
+
+    @Test
+    void processWebhook_IgnoresCancelledPayment() {
+        String body = "{\"event\":\"charge.success\",\"data\":{\"reference\":\"REF123\",\"channel\":\"card\"}}";
+        testPayment.setStatus(PaymentStatus.CANCELLED);
+        when(paymentRepository.findByProviderPaymentReference("REF123")).thenReturn(testPayment);
+
+        webhookProcessor.processWebhook(body);
+
+        verify(paymentRepository, never()).save(any());
+        verifyNoInteractions(orderRepository, cartRepository, bookkeepingService, eventPublisher);
+    }
 }

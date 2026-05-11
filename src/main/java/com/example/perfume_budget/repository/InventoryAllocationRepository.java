@@ -5,6 +5,7 @@ import com.example.perfume_budget.enums.InventoryReferenceType;
 import com.example.perfume_budget.model.InventoryAllocation;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 public interface InventoryAllocationRepository extends JpaRepository<InventoryAllocation, Long> {
@@ -17,5 +18,11 @@ public interface InventoryAllocationRepository extends JpaRepository<InventoryAl
     List<InventoryAllocation> findByReferenceTypeAndReferenceIdOrderByIdAsc(
             InventoryReferenceType referenceType,
             String referenceId
+    );
+
+    List<InventoryAllocation> findByReferenceTypeAndStatusAndCreatedAtBefore(
+            InventoryReferenceType referenceType,
+            InventoryAllocationStatus status,
+            LocalDateTime createdAtBefore
     );
 }

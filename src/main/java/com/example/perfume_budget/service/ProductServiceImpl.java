@@ -25,6 +25,8 @@ import com.example.perfume_budget.utils.ProductCodeGenerator;
 import com.example.perfume_budget.utils.SlugGenerator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -54,9 +56,11 @@ public class ProductServiceImpl implements ProductService {
     private final CloudinaryFileUploadUtil cloudinaryFileUploadUtil;
     private final BookkeepingService bookkeepingService;
     private final InventoryManagementService inventoryManagementService;
+    private final ProductCatalogCacheService productCatalogCacheService;
 
     @Override
     @Transactional
+    @CacheEvict(cacheNames = {"customerProductListings", "featuredProducts", "productDetailsPage"}, allEntries = true)
     public ProductDetails createProduct(ProductRequest request) {
         checkIfImageIsPresentForEcommerceProduct(request);
 
@@ -195,7 +199,12 @@ public class ProductServiceImpl implements ProductService {
     }
 
     @Override
+    @Cacheable(
+            cacheNames = "customerProductListings",
+            key = "#pageable.pageNumber + ':' + #pageable.pageSize + ':' + #pageable.sort.toString()"
+    )
     public PageResponse<ProductListing> getProductListings(Pageable pageable) {
+        log.info("Cache miss: customerProductListings");
         Page<ProductListing> productListings = productRepository.findAllByIsActiveTrueAndIsEnlistedTrue(pageable)
                 .map(ProductMapper::toProductListing);
         return PaginationUtil.createPageResponse(productListings);
@@ -216,10 +225,7 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     public List<ProductListing> getFeaturedProducts() {
-        return productRepository.findTop8ByIsActiveTrueAndIsEnlistedTrueAndIsFeaturedTrue()
-                .stream()
-                .map(ProductMapper::toProductListing)
-                .toList();
+        return productCatalogCacheService.getFeaturedProducts();
     }
 
     @Override
@@ -238,25 +244,14 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     public ProductDetailsPageResponse getProductDetailsPage(String slug) {
-        Product product = productRepository.findBySlugAndIsActiveTrueAndIsEnlistedTrue(slug)
-                .orElseThrow(() -> new ResourceNotFoundException(PRODUCT_NOT_FOUND));
-        updateProductViewCount(product.getId());
-        return ProductDetailsPageResponse.builder()
-                .productId(product.getId())
-                .productName(product.getName())
-                .productShortDescription(product.getShortDescription())
-                .productDescription(product.getDescription())
-                .productImageUrl(product.getImageUrl())
-                .category(product.getCategory() != null ? product.getCategory().getName() : "")
-                .sellingPrice(product.getPrice().toString())
-                .isOutOfStock(product.getStockQuantity() <= 0)
-                .isFeatured(product.getIsFeatured())
-                .slug(product.getSlug())
-                .build();
+        ProductDetailsPageResponse response = productCatalogCacheService.getProductDetailsPage(slug);
+        updateProductViewCount(response.productId());
+        return response;
     }
 
     @Override
     @Transactional
+    @CacheEvict(cacheNames = {"customerProductListings", "featuredProducts", "productDetailsPage"}, allEntries = true)
     public ProductDetails updateProduct(Long productId, ProductRequest request) {
         Product productToUpdate = productRepository.findById(productId).orElseThrow(() -> new ResourceNotFoundException(PRODUCT_NOT_FOUND));
         checkIfImageIsPresentForEcommerceProductUpdate(request, productToUpdate);
@@ -454,6 +449,7 @@ public class ProductServiceImpl implements ProductService {
     }
 
     @Override
+    @CacheEvict(cacheNames = {"customerProductListings", "featuredProducts", "productDetailsPage"}, allEntries = true)
     public void deleteProduct(Long productId) {
         productRepository.deleteById(productId);
     }

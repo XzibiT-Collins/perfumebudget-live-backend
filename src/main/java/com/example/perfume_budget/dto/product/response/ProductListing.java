@@ -2,6 +2,8 @@ package com.example.perfume_budget.dto.product.response;
 
 import lombok.Builder;
 
+import java.io.Serializable;
+
 @Builder
 public record ProductListing(
         Long productId,
@@ -15,4 +17,6 @@ public record ProductListing(
         boolean isEnlisted,
         String slug,
         Integer stockQuantity
-) {}
+) implements Serializable {
+    private static final long serialVersionUID = 1L;
+}
