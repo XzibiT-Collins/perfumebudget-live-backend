@@ -58,6 +58,12 @@ public class WebhookProcessorImpl implements WebhookProcessor {
             payment.setGatewayResponse(body);
 
             if ("charge.success".equals(payload.event())) {
+                if (payment.getOrder() != null && payment.getOrder().getStatus() == PaymentStatus.CANCELLED) {
+                    log.info("Ignoring webhook success for cancelled order {}", payment.getOrder().getOrderNumber());
+                    payment.setStatus(PaymentStatus.CANCELLED);
+                    paymentRepository.save(payment);
+                    return;
+                }
                 log.info("Payment successful for reference {}", reference);
                 payment.setStatus(PaymentStatus.COMPLETED);
                 payment.setPaymentMethod(payload.data().channel());

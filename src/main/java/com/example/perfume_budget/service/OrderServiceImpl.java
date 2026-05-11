@@ -195,6 +195,9 @@ public class OrderServiceImpl implements OrderService {
         if(order.getDeliveryStatus() == OrderProcessingStatus.DELIVERED){
             throw new BadRequestException("Order is already delivered and can not be updated.");
         }
+        if (order.getDeliveryStatus() == OrderProcessingStatus.CANCELLED) {
+            throw new BadRequestException("Order is already cancelled and can not be updated.");
+        }
         if(order.getDeliveryStatus() != request.orderStatus()){
             order.setDeliveryStatus(request.orderStatus());
             eventPublisher.publishEvent(OrderStatusChangeEvent.builder()
