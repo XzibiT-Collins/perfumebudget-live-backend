@@ -17,6 +17,7 @@ import com.example.perfume_budget.service.interfaces.InventoryManagementService;
 import com.example.perfume_budget.utils.AuthUserUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -42,6 +43,7 @@ public class InventoryManagementServiceImpl implements InventoryManagementServic
 
     @Override
     @Transactional
+//    @CacheEvict(cacheNames = {"customerProductListings", "featuredProducts", "productDetailsPage"}, allEntries = true)
     public InventorySummaryResponse receiveStock(InventoryReceiptRequest request) {
         Product product = getProduct(request.productId());
         validatePositiveAmounts(request.unitCost(), request.unitSellingPrice());
@@ -69,6 +71,7 @@ public class InventoryManagementServiceImpl implements InventoryManagementServic
 
     @Override
     @Transactional
+//    @CacheEvict(cacheNames = {"customerProductListings", "featuredProducts", "productDetailsPage"}, allEntries = true)
     public InventorySummaryResponse adjustInventory(InventoryAdjustmentRequest request) {
         Product product = getProduct(request.productId());
         return switch (request.direction()) {
@@ -97,6 +100,7 @@ public class InventoryManagementServiceImpl implements InventoryManagementServic
 
     @Override
     @Transactional
+//    @CacheEvict(cacheNames = {"customerProductListings", "featuredProducts", "productDetailsPage"}, allEntries = true)
     public Product recordOpeningStock(Product product,
                                       Integer quantity,
                                       BigDecimal unitCost,
@@ -131,6 +135,7 @@ public class InventoryManagementServiceImpl implements InventoryManagementServic
 
     @Override
     @Transactional
+//    @CacheEvict(cacheNames = {"customerProductListings", "featuredProducts", "productDetailsPage"}, allEntries = true)
     public void reserveOrderInventory(String orderNumber, List<OrderItem> orderItems) {
         for (OrderItem item : orderItems) {
             consumeInventory(getProduct(item.getProductId()),
@@ -145,6 +150,7 @@ public class InventoryManagementServiceImpl implements InventoryManagementServic
 
     @Override
     @Transactional
+    @CacheEvict(cacheNames = {"customerProductListings", "featuredProducts", "productDetailsPage"}, allEntries = true)
     public void releaseOrderInventory(String orderNumber) {
         List<InventoryAllocation> allocations = inventoryAllocationRepository
                 .findByReferenceTypeAndReferenceIdAndStatusOrderByIdAsc(
@@ -175,6 +181,7 @@ public class InventoryManagementServiceImpl implements InventoryManagementServic
 
     @Override
     @Transactional
+    @CacheEvict(cacheNames = {"customerProductListings", "featuredProducts", "productDetailsPage"}, allEntries = true)
     public void finalizeReservedOrder(Order order) {
         List<InventoryAllocation> allocations = inventoryAllocationRepository
                 .findByReferenceTypeAndReferenceIdAndStatusOrderByIdAsc(
@@ -220,6 +227,7 @@ public class InventoryManagementServiceImpl implements InventoryManagementServic
 
     @Override
     @Transactional
+    @CacheEvict(cacheNames = {"customerProductListings", "featuredProducts", "productDetailsPage"}, allEntries = true)
     public void consumeWalkInInventory(String orderNumber, List<WalkInOrderItem> items) {
         for (WalkInOrderItem item : items) {
             InventoryConsumption consumption = consumeInventory(getProduct(item.getProductId()),
@@ -236,6 +244,7 @@ public class InventoryManagementServiceImpl implements InventoryManagementServic
 
     @Override
     @Transactional
+    @CacheEvict(cacheNames = {"customerProductListings", "featuredProducts", "productDetailsPage"}, allEntries = true)
     public InventoryConsumption consumeInventory(Product product,
                                                  int quantity,
                                                  InventoryReferenceType referenceType,
@@ -302,6 +311,7 @@ public class InventoryManagementServiceImpl implements InventoryManagementServic
 
     @Override
     @Transactional
+    @CacheEvict(cacheNames = {"customerProductListings", "featuredProducts", "productDetailsPage"}, allEntries = true)
     public Product createConversionLayer(Product product,
                                          int quantity,
                                          BigDecimal unitCost,
