@@ -3,10 +3,12 @@ package com.example.perfume_budget.mapper;
 import com.example.perfume_budget.dto.cart_item.request.CartItemRequest;
 import com.example.perfume_budget.dto.cart_item.response.CartItemResponse;
 import com.example.perfume_budget.enums.CurrencyCode;
+import com.example.perfume_budget.enums.DiscountSource;
 import com.example.perfume_budget.model.Cart;
 import com.example.perfume_budget.model.CartItem;
 import com.example.perfume_budget.model.Money;
 import com.example.perfume_budget.model.Product;
+import com.example.perfume_budget.pricing.EffectivePrice;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -25,7 +27,10 @@ class CartItemMapperTest {
                 .quantity(2)
                 .build();
 
-        CartItemResponse response = CartItemMapper.toCartItemResponse(cartItem);
+        EffectivePrice effectivePrice = new EffectivePrice(BigDecimal.TEN, BigDecimal.TEN, CurrencyCode.USD,
+                false, DiscountSource.NONE, null, BigDecimal.ZERO, null);
+
+        CartItemResponse response = CartItemMapper.toCartItemResponse(cartItem, effectivePrice);
 
         assertNotNull(response);
         assertEquals(10L, response.cartItemId());
@@ -38,13 +43,13 @@ class CartItemMapperTest {
 
     @Test
     void toCartItemResponse_NullInput_ThrowsException() {
-        assertThrows(NullPointerException.class, () -> CartItemMapper.toCartItemResponse(null));
+        assertThrows(NullPointerException.class, () -> CartItemMapper.toCartItemResponse(null, null));
     }
 
     @Test
     void toCartItemResponse_NullProduct_ThrowsException() {
         CartItem cartItem = CartItem.builder().id(1L).product(null).build();
-        assertThrows(NullPointerException.class, () -> CartItemMapper.toCartItemResponse(cartItem));
+        assertThrows(NullPointerException.class, () -> CartItemMapper.toCartItemResponse(cartItem, null));
     }
 
     @Test

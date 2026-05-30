@@ -1,5 +1,6 @@
 package com.example.perfume_budget.utils;
 
+import com.example.perfume_budget.enums.DiscountType;
 import com.example.perfume_budget.exception.BadRequestException;
 import com.example.perfume_budget.model.Coupon;
 import com.example.perfume_budget.repository.CouponRepository;
@@ -51,14 +52,26 @@ public class DiscountCalculationUtil {
 
         return switch (coupon.getDiscountType()) {
             case PERCENTAGE -> {
-                BigDecimal calculated = orderSubtotal
-                        .multiply(coupon.getDiscountValue())
-                        .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+                BigDecimal calculated = computeDiscountAmount(DiscountType.PERCENTAGE, coupon.getDiscountValue(), orderSubtotal);
                 yield coupon.getMaximumDiscountAmount() != null
                         ? calculated.min(coupon.getMaximumDiscountAmount())
                         : calculated;
             }
-            case FLAT -> coupon.getDiscountValue().min(orderSubtotal);
+            case FLAT -> computeDiscountAmount(DiscountType.FLAT, coupon.getDiscountValue(), orderSubtotal);
+        };
+    }
+
+    /**
+     * Pure percentage/flat discount math, shared by coupons and product/shop-wide discounts.
+     * Returns the discount amount (never greater than {@code base}), not the final price.
+     */
+    public static BigDecimal computeDiscountAmount(DiscountType type, BigDecimal value, BigDecimal base) {
+        return switch (type) {
+            case PERCENTAGE -> base
+                    .multiply(value)
+                    .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP)
+                    .min(base);
+            case FLAT -> value.min(base);
         };
     }
 

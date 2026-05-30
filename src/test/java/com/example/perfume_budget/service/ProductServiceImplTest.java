@@ -6,6 +6,7 @@ import com.example.perfume_budget.dto.product.response.ProductDetails;
 import com.example.perfume_budget.dto.product.response.ProductDetailsPageResponse;
 import com.example.perfume_budget.dto.product.response.ProductListing;
 import com.example.perfume_budget.enums.CurrencyCode;
+import com.example.perfume_budget.enums.DiscountSource;
 import com.example.perfume_budget.enums.UserRole;
 import com.example.perfume_budget.events.ViewCountEvent;
 import com.example.perfume_budget.exception.BadRequestException;
@@ -16,6 +17,7 @@ import com.example.perfume_budget.model.Product;
 import com.example.perfume_budget.model.ProductFamily;
 import com.example.perfume_budget.model.UnitOfMeasure;
 import com.example.perfume_budget.model.User;
+import com.example.perfume_budget.pricing.EffectivePrice;
 import com.example.perfume_budget.repository.CategoryRepository;
 import com.example.perfume_budget.repository.ProductFamilyRepository;
 import com.example.perfume_budget.repository.ProductRepository;
@@ -68,6 +70,8 @@ class ProductServiceImplTest {
     private InventoryManagementService inventoryManagementService;
     @Mock
     private ProductCatalogCacheService productCatalogCacheService;
+    @Mock
+    private EffectivePriceService effectivePriceService;
 
     @InjectMocks
     private ProductServiceImpl productService;
@@ -123,6 +127,20 @@ class ProductServiceImplTest {
                 .build();
 
         family.setBaseUnit(baseProduct);
+
+        // By default no product/shop discount: effective price echoes the product's base price.
+        lenient().when(effectivePriceService.activeShopDiscount()).thenReturn(Optional.empty());
+        lenient().when(effectivePriceService.now()).thenReturn(java.time.LocalDateTime.now());
+        lenient().when(effectivePriceService.compute(any(Product.class))).thenAnswer(this::echoEffectivePrice);
+        lenient().when(effectivePriceService.compute(any(Product.class), any(), any())).thenAnswer(this::echoEffectivePrice);
+    }
+
+    private EffectivePrice echoEffectivePrice(org.mockito.invocation.InvocationOnMock invocation) {
+        Product p = invocation.getArgument(0);
+        BigDecimal amount = p.getPrice() != null && p.getPrice().getAmount() != null
+                ? p.getPrice().getAmount() : BigDecimal.ZERO;
+        CurrencyCode currency = p.getPrice() != null ? p.getPrice().getCurrencyCode() : null;
+        return new EffectivePrice(amount, amount, currency, false, DiscountSource.NONE, null, BigDecimal.ZERO, null);
     }
 
     @Test
