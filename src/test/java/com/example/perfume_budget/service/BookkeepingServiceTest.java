@@ -153,6 +153,35 @@ class BookkeepingServiceTest {
     }
 
     @Test
+    @DisplayName("Record Sale - Automatic (product/shop) discount books gross revenue + discount line")
+    void recordSale_Success_WithAutomaticDiscount() {
+        // net subtotal 80, automatic discount 20 -> gross 100; no tax; total 80
+        Order order = createOrder("ORD-AUTO", new BigDecimal("80.00"), BigDecimal.ZERO, BigDecimal.ZERO, new BigDecimal("80.00"));
+        order.setAutomaticDiscountAmount(new Money(new BigDecimal("20.00"), CurrencyCode.GHS));
+        OrderItem item = OrderItem.builder()
+                .costPrice(new Money(new BigDecimal("50.00"), CurrencyCode.GHS))
+                .quantity(1)
+                .build();
+        order.setItems(List.of(item));
+        Payment payment = Payment.builder().paidAt(LocalDateTime.now()).build();
+        mockAccounts();
+
+        bookkeepingService.recordSale(order, payment);
+
+        ArgumentCaptor<JournalEntry> entryCaptor = ArgumentCaptor.forClass(JournalEntry.class);
+        verify(journalEntryRepository).save(entryCaptor.capture());
+        List<JournalEntryLine> lines = entryCaptor.getValue().getLines();
+
+        // revenue is GROSS (80 net + 20 automatic discount), discount expensed separately
+        assertLine(lines, AccountCategory.SALES_REVENUE, EntryType.CREDIT, new BigDecimal("100.00"));
+        assertLine(lines, AccountCategory.DISCOUNT_EXPENSE, EntryType.DEBIT, new BigDecimal("20.00"));
+        assertLine(lines, AccountCategory.CASH, EntryType.DEBIT, new BigDecimal("80.00"));
+        assertLine(lines, AccountCategory.COGS, EntryType.DEBIT, new BigDecimal("50.00"));
+        assertLine(lines, AccountCategory.INVENTORY, EntryType.CREDIT, new BigDecimal("50.00"));
+        // entry passed validateEntry => debits == credits (balanced)
+    }
+
+    @Test
     @DisplayName("Record Inventory Purchase - Success")
     void recordInventoryPurchase_Success() {
         // Arrange

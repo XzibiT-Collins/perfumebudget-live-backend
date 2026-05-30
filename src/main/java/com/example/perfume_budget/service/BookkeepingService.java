@@ -43,8 +43,10 @@ public class BookkeepingService {
         LedgerAccount cogs = getAccount(AccountCategory.COGS, false);
         LedgerAccount inventory = getAccount(AccountCategory.INVENTORY, false);
 
-        BigDecimal subtotal = order.getSubtotal().getAmount();
-        BigDecimal discount = order.getDiscountAmount().getAmount();
+        BigDecimal subtotal = moneyAmount(order.getSubtotal());          // net of automatic discount
+        BigDecimal autoDiscount = moneyAmount(order.getAutomaticDiscountAmount()); // product/shop
+        BigDecimal couponDiscount = moneyAmount(order.getDiscountAmount());        // coupon
+        BigDecimal grossRevenue = subtotal.add(autoDiscount);
         BigDecimal tax = order.getTotalTaxAmount().getAmount();
         BigDecimal total = order.getTotalAmount().getAmount();
         BigDecimal totalCOGS = order.getItems().stream()
@@ -67,17 +69,20 @@ public class BookkeepingService {
         List<JournalEntryLine> lines = new ArrayList<>();
         // cash received
         lines.add(buildLines(entry, cash, EntryType.DEBIT, total, "Payment Received"));
-        // revenue earned (Gross)
-        lines.add(buildLines(entry, revenue, EntryType.CREDIT, subtotal, "Sales revenue"));
+        // revenue earned (Gross — before any discount)
+        lines.add(buildLines(entry, revenue, EntryType.CREDIT, grossRevenue, "Sales revenue"));
 
         // tax collected
         if(tax.compareTo(BigDecimal.ZERO) > 0){
             lines.add(buildLines(entry, taxPayable, EntryType.CREDIT, tax, "Tax collected"));
         }
 
-        // discount given
-        if(discount.compareTo(BigDecimal.ZERO) > 0){
-            lines.add(buildLines(entry, discountExpense, EntryType.DEBIT, discount, "Discount given"));
+        // discount given — separate lines per source for audit detail
+        if(autoDiscount.compareTo(BigDecimal.ZERO) > 0){
+            lines.add(buildLines(entry, discountExpense, EntryType.DEBIT, autoDiscount, "Automatic discount (product/shop) for order: " + order.getOrderNumber()));
+        }
+        if(couponDiscount.compareTo(BigDecimal.ZERO) > 0){
+            lines.add(buildLines(entry, discountExpense, EntryType.DEBIT, couponDiscount, "Coupon discount for order: " + order.getOrderNumber()));
         }
 
         // record cost of goods sold and inventory reduction
@@ -105,8 +110,10 @@ public class BookkeepingService {
         LedgerAccount cogs = getAccount(AccountCategory.COGS, false);
         LedgerAccount inventory = getAccount(AccountCategory.INVENTORY, false);
 
-        BigDecimal subtotal = order.getSubtotal().getAmount();
-        BigDecimal discount = order.getDiscountAmount().getAmount();
+        BigDecimal subtotal = moneyAmount(order.getSubtotal());          // net of automatic discount
+        BigDecimal autoDiscount = moneyAmount(order.getAutomaticDiscountAmount()); // product/shop
+        BigDecimal manualDiscount = moneyAmount(order.getDiscountAmount());        // manual front-desk
+        BigDecimal grossRevenue = subtotal.add(autoDiscount);
         BigDecimal tax = order.getTotalTaxAmount().getAmount();
         BigDecimal total = order.getTotalAmount().getAmount();
         BigDecimal totalCOGS = order.getItems().stream()
@@ -128,14 +135,18 @@ public class BookkeepingService {
 
         List<JournalEntryLine> lines = new ArrayList<>();
         addWalkInPaymentLines(order, entry, lines, cash, mobileMoney, total);
-        lines.add(buildLines(entry, revenue, EntryType.CREDIT, subtotal, "Sales revenue"));
+        lines.add(buildLines(entry, revenue, EntryType.CREDIT, grossRevenue, "Sales revenue"));
 
         if (tax.compareTo(BigDecimal.ZERO) > 0) {
             lines.add(buildLines(entry, taxPayable, EntryType.CREDIT, tax, "Tax collected"));
         }
 
-        if (discount.compareTo(BigDecimal.ZERO) > 0) {
-            lines.add(buildLines(entry, discountExpense, EntryType.DEBIT, discount, "Discount given"));
+        // discount given — separate lines per source for audit detail
+        if (autoDiscount.compareTo(BigDecimal.ZERO) > 0) {
+            lines.add(buildLines(entry, discountExpense, EntryType.DEBIT, autoDiscount, "Automatic discount (product/shop) for order: " + order.getOrderNumber()));
+        }
+        if (manualDiscount.compareTo(BigDecimal.ZERO) > 0) {
+            lines.add(buildLines(entry, discountExpense, EntryType.DEBIT, manualDiscount, "Manual discount for order: " + order.getOrderNumber()));
         }
 
         if (totalCOGS.compareTo(BigDecimal.ZERO) > 0) {
@@ -149,6 +160,11 @@ public class BookkeepingService {
         updateAccountBalances(lines, false);
 
         log.info("Walk-in journal entry recorded for order: {}", order.getOrderNumber());
+    }
+
+    /** Null-safe amount accessor (older orders may have no automatic-discount value). */
+    private static BigDecimal moneyAmount(Money money) {
+        return money != null && money.getAmount() != null ? money.getAmount() : BigDecimal.ZERO;
     }
 
 

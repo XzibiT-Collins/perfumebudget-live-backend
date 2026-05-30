@@ -3,7 +3,10 @@ package com.example.perfume_budget.mapper;
 import com.example.perfume_budget.dto.order.OrderListResponse;
 import com.example.perfume_budget.dto.order.OrderResponse;
 import com.example.perfume_budget.dto.tax.TaxCalculationResponse;
+import com.example.perfume_budget.model.Money;
 import com.example.perfume_budget.model.Order;
+
+import java.math.BigDecimal;
 
 public class OrderMapper {
     private OrderMapper(){
@@ -12,10 +15,18 @@ public class OrderMapper {
 
     public static OrderResponse toOrderResponse(Order order){
 
+        Money subtotal = order.getSubtotal();
+        BigDecimal autoDiscount = amount(order.getAutomaticDiscountAmount());
+        Money originalSubtotal = new Money(amount(subtotal).add(autoDiscount), subtotal.getCurrencyCode());
+
         return OrderResponse.builder()
                 .orderId(order.getId())
                 .orderNumber(order.getOrderNumber())
-                .subtotal(order.getSubtotal().toString())
+                .subtotal(subtotal.toString())
+                .originalSubtotal(originalSubtotal.toString())
+                .automaticDiscountAmount(
+                        order.getAutomaticDiscountAmount() != null ?
+                                order.getAutomaticDiscountAmount().toString() : "")
                 .discountAmount(
                         order.getDiscountAmount() != null ?
                                 order.getDiscountAmount().toString() : "")
@@ -52,5 +63,9 @@ public class OrderMapper {
                 .totalAmount(order.getTotalAmount().toString())
                 .orderDate(order.getCreatedAt())
                 .build();
+    }
+
+    private static BigDecimal amount(Money money) {
+        return money != null && money.getAmount() != null ? money.getAmount() : BigDecimal.ZERO;
     }
 }

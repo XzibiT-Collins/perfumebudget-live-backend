@@ -104,6 +104,7 @@ public class WalkInOrderServiceImpl implements WalkInOrderService {
                 .processedBy(currentUser)
                 .subtotal(new Money(subtotal, CurrencyCode.GHS))
                 .discountAmount(new Money(discountAmount, CurrencyCode.GHS))
+                .automaticDiscountAmount(new Money(itemsResult.automaticDiscount(), CurrencyCode.GHS))
                 .totalTaxAmount(new Money(taxResult.totalTaxAmount().getAmount(), CurrencyCode.GHS))
                 .totalAmount(new Money(totalAmount, CurrencyCode.GHS))
                 .amountPaid(new Money(paymentValidation.amountPaid(), CurrencyCode.GHS))
@@ -234,6 +235,7 @@ public class WalkInOrderServiceImpl implements WalkInOrderService {
 
         List<WalkInOrderItem> orderItems = new ArrayList<>();
         boolean anyOnSale = false;
+        BigDecimal automaticDiscount = BigDecimal.ZERO;
         for (WalkInOrderItemRequest itemRequest : items) {
             Product product = productRepository.findById(itemRequest.productId())
                     .orElseThrow(() -> new ResourceNotFoundException("Product not found with id: " + itemRequest.productId()));
@@ -249,8 +251,11 @@ public class WalkInOrderServiceImpl implements WalkInOrderService {
             if (effectivePrice.onSale()) {
                 anyOnSale = true;
             }
+            BigDecimal quantity = BigDecimal.valueOf(itemRequest.quantity());
             BigDecimal unitPrice = scale(effectivePrice.effectiveAmount());
-            BigDecimal totalPrice = scale(unitPrice.multiply(BigDecimal.valueOf(itemRequest.quantity())));
+            BigDecimal totalPrice = scale(unitPrice.multiply(quantity));
+            automaticDiscount = automaticDiscount.add(
+                    effectivePrice.originalAmount().subtract(effectivePrice.effectiveAmount()).multiply(quantity));
 
             orderItems.add(WalkInOrderItem.builder()
                     .productId(product.getId())
@@ -262,7 +267,7 @@ public class WalkInOrderServiceImpl implements WalkInOrderService {
                     .totalPrice(totalPrice)
                     .build());
         }
-        return new WalkInItemsResult(orderItems, anyOnSale);
+        return new WalkInItemsResult(orderItems, anyOnSale, scale(automaticDiscount));
     }
 
     private DiscountApplication applyWalkInDiscount(DiscountType discountType,
@@ -381,6 +386,6 @@ public class WalkInOrderServiceImpl implements WalkInOrderService {
                                        BigDecimal finalPrice) {
     }
 
-    private record WalkInItemsResult(List<WalkInOrderItem> items, boolean anyOnSale) {
+    private record WalkInItemsResult(List<WalkInOrderItem> items, boolean anyOnSale, BigDecimal automaticDiscount) {
     }
 }

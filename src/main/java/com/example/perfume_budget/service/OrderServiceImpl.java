@@ -82,14 +82,17 @@ public class OrderServiceImpl implements OrderService {
         LocalDateTime pricingTime = effectivePriceService.now();
 
         BigDecimal orderSubtotal = BigDecimal.ZERO;
+        BigDecimal automaticDiscount = BigDecimal.ZERO;
         boolean anyItemOnSale = false;
         for (CartItem cartItem : cart.getItems()) {
             EffectivePrice effectivePrice = effectivePriceService.compute(cartItem.getProduct(), activeShop, pricingTime);
             if (effectivePrice.onSale()) {
                 anyItemOnSale = true;
             }
-            orderSubtotal = orderSubtotal.add(
-                    effectivePrice.effectiveAmount().multiply(BigDecimal.valueOf(cartItem.getQuantity())));
+            BigDecimal quantity = BigDecimal.valueOf(cartItem.getQuantity());
+            orderSubtotal = orderSubtotal.add(effectivePrice.effectiveAmount().multiply(quantity));
+            automaticDiscount = automaticDiscount.add(
+                    effectivePrice.originalAmount().subtract(effectivePrice.effectiveAmount()).multiply(quantity));
         }
 
         Coupon coupon = null;
@@ -112,6 +115,7 @@ public class OrderServiceImpl implements OrderService {
                 .user(currentUser)
                 .subtotal(new Money(orderSubtotal, CurrencyCode.GHS))
                 .discountAmount(new Money(discountAmount, CurrencyCode.GHS))
+                .automaticDiscountAmount(new Money(automaticDiscount, CurrencyCode.GHS))
                 .totalTaxAmount(taxCalculationResult.totalTaxAmount())
                 .totalAmount(taxCalculationResult.totalAmountAfterTax())
                 .status(PaymentStatus.PENDING)

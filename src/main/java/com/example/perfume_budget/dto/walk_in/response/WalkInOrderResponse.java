@@ -18,8 +18,10 @@ public record WalkInOrderResponse(
         String discountValue,
         WalkInPaymentMethod paymentMethod,
         WalkInOrderStatus status,
-        String subtotal,
-        String discountAmount,
+        String subtotal,              // net of automatic (product/shop) discount
+        String originalSubtotal,      // gross, before automatic discount
+        String automaticDiscountAmount, // product/shop discount baked into subtotal
+        String discountAmount,        // manual front-desk discount
         String totalTaxAmount,
         String totalAmount,
         String amountPaid,

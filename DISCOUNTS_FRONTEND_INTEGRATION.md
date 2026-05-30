@@ -163,6 +163,24 @@ Frontend tasks:
 
 ---
 
+### 3.5 Order & walk-in responses — discount breakdown
+
+`OrderResponse` (online order detail) and `WalkInOrderResponse` gained two fields so receipts/order
+views can show the markdown:
+
+| Field | Meaning |
+|---|---|
+| `subtotal` | NET of automatic (product/shop) discount — unchanged meaning |
+| `originalSubtotal` | gross, before the automatic discount |
+| `automaticDiscountAmount` | product/shop discount baked into the line prices |
+| `discountAmount` | coupon (online) / manual (walk-in) discount — unchanged |
+
+All are money strings (`"GHS 100.00"`). `originalSubtotal == subtotal` when nothing was on sale.
+Show "You saved {automaticDiscountAmount}" and/or a struck-through `originalSubtotal` on receipts.
+
+> Accounting note (no frontend action): these discounts are now booked as gross revenue + a
+> `DISCOUNT_EXPENSE` line, so the P&L reflects all discounts given. Net profit is unchanged.
+
 ## 4. New admin endpoints
 
 All require `ADMIN` role (same auth/JWT as existing admin endpoints). All wrap responses in the standard envelope.
