@@ -5,6 +5,7 @@ import com.example.perfume_budget.dto.inventory.request.InventoryAdjustmentReque
 import com.example.perfume_budget.dto.inventory.request.InventoryReceiptRequest;
 import com.example.perfume_budget.dto.inventory.response.InventoryMovementResponse;
 import com.example.perfume_budget.dto.inventory.response.InventorySummaryResponse;
+import com.example.perfume_budget.dto.inventory.response.ProductStockByLocationResponse;
 import com.example.perfume_budget.service.interfaces.InventoryManagementService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -46,6 +47,15 @@ public class InventoryManagementController {
             @PathVariable Long productId) {
         return ResponseEntity.ok(CustomApiResponse.success(
                 inventoryManagementService.getProductInventorySummary(productId)
+        ));
+    }
+
+    @PreAuthorize("hasAnyRole('ADMIN','FRONT_DESK')")
+    @GetMapping("/products/{productId}/stock-by-location")
+    public ResponseEntity<CustomApiResponse<ProductStockByLocationResponse>> getProductStockByLocation(
+            @PathVariable Long productId) {
+        return ResponseEntity.ok(CustomApiResponse.success(
+                inventoryManagementService.getProductStockByLocation(productId)
         ));
     }
 
