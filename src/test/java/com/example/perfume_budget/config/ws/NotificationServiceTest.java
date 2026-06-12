@@ -152,4 +152,81 @@ class NotificationServiceTest {
         assertEquals(null, recipientTwo.getDeliveredAt());
         verify(messagingTemplate, times(1)).convertAndSendToUser(eq("admin1@example.com"), eq("/queue/notifications"), any());
     }
+
+    @Test
+    void notifyStaffOfShopFloorShortage_SkipsWhileUnreadAlertExists() {
+        when(notificationRecipientRepository.existsByNotificationTypeAndNotificationReferenceIdAndIsReadFalse(
+                "SHOP_FLOOR_RESTOCK", "17")).thenReturn(true);
+
+        notificationService.notifyStaffOfShopFloorShortage(17L, "Oud Royale", 0, 20);
+
+        verify(userRepository, never()).findAllByRolesIn(any());
+        verify(notificationRepository, never()).save(any());
+        verify(messagingTemplate, never()).convertAndSendToUser(any(), any(), any());
+    }
+
+    @Test
+    void notifyStaffOfShopFloorShortage_DoesNothingWithoutStaffUsers() {
+        when(notificationRecipientRepository.existsByNotificationTypeAndNotificationReferenceIdAndIsReadFalse(
+                "SHOP_FLOOR_RESTOCK", "17")).thenReturn(false);
+        when(userRepository.findAllByRolesIn(List.of(UserRole.ADMIN, UserRole.FRONT_DESK))).thenReturn(List.of());
+
+        notificationService.notifyStaffOfShopFloorShortage(17L, "Oud Royale", 0, 20);
+
+        verify(notificationRepository, never()).save(any());
+    }
+
+    @Test
+    void notifyStaffOfShopFloorShortage_PersistsTypedNotification_ForAllStaff() {
+        when(notificationRecipientRepository.existsByNotificationTypeAndNotificationReferenceIdAndIsReadFalse(
+                "SHOP_FLOOR_RESTOCK", "17")).thenReturn(false);
+        when(userRepository.findAllByRolesIn(List.of(UserRole.ADMIN, UserRole.FRONT_DESK))).thenReturn(List.of(adminOne, adminTwo));
+        when(notificationRepository.save(any(Notification.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(notificationRecipientRepository.saveAll(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(adminSessionManager.getConnectedAdmins()).thenReturn(Set.of());
+
+        notificationService.notifyStaffOfShopFloorShortage(17L, "Oud Royale", 0, 20);
+
+        ArgumentCaptor<Notification> notificationCaptor = ArgumentCaptor.forClass(Notification.class);
+        verify(notificationRepository).save(notificationCaptor.capture());
+        Notification saved = notificationCaptor.getValue();
+        assertEquals("SHOP_FLOOR_RESTOCK", saved.getType());
+        assertEquals("PRODUCT", saved.getReferenceType());
+        assertEquals("17", saved.getReferenceId());
+        assertEquals("Oud Royale is low on the shop floor (0 left). 20 unit(s) available in store rooms.", saved.getMessage());
+
+        ArgumentCaptor<List<NotificationRecipient>> recipientCaptor = ArgumentCaptor.forClass(List.class);
+        verify(notificationRecipientRepository).saveAll(recipientCaptor.capture());
+        assertEquals(2, recipientCaptor.getValue().size());
+        verify(messagingTemplate, never()).convertAndSendToUser(any(), any(), any());
+    }
+
+    @Test
+    void notifyStaffOfShopFloorShortage_PushesOnlyToConnectedStaff() {
+        Notification savedNotification = Notification.builder()
+                .id(20L).type("SHOP_FLOOR_RESTOCK").title("Shop floor restock needed")
+                .message("Oud Royale is low on the shop floor (0 left). 20 unit(s) available in store rooms.")
+                .referenceType("PRODUCT").referenceId("17")
+                .createdAt(LocalDateTime.of(2026, 6, 12, 14, 0))
+                .build();
+        NotificationRecipient recipientOne = NotificationRecipient.builder()
+                .id(200L).notification(savedNotification).user(adminOne).isRead(false).build();
+        NotificationRecipient recipientTwo = NotificationRecipient.builder()
+                .id(201L).notification(savedNotification).user(adminTwo).isRead(false).build();
+
+        when(notificationRecipientRepository.existsByNotificationTypeAndNotificationReferenceIdAndIsReadFalse(
+                "SHOP_FLOOR_RESTOCK", "17")).thenReturn(false);
+        when(userRepository.findAllByRolesIn(List.of(UserRole.ADMIN, UserRole.FRONT_DESK))).thenReturn(List.of(adminOne, adminTwo));
+        when(notificationRepository.save(any(Notification.class))).thenReturn(savedNotification);
+        when(notificationRecipientRepository.saveAll(any()))
+                .thenReturn(List.of(recipientOne, recipientTwo))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(adminSessionManager.getConnectedAdmins()).thenReturn(Set.of("admin2@example.com"));
+
+        notificationService.notifyStaffOfShopFloorShortage(17L, "Oud Royale", 0, 20);
+
+        assertEquals(null, recipientOne.getDeliveredAt());
+        assertNotNull(recipientTwo.getDeliveredAt());
+        verify(messagingTemplate, times(1)).convertAndSendToUser(eq("admin2@example.com"), eq("/queue/notifications"), any());
+    }
 }
