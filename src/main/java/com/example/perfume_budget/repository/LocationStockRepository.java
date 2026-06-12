@@ -25,7 +25,9 @@ public interface LocationStockRepository extends JpaRepository<LocationStock, Lo
     int sumQuantityByProductAndLocationType(@Param("productId") Long productId,
                                             @Param("type") StorageLocationType type);
 
-    @Query("select ls from LocationStock ls where ls.product.id = :productId and ls.location.type = :type and ls.location.active = true")
+    // join fetch: callers (async event handler) read the location outside any session
+    @Query("select ls from LocationStock ls join fetch ls.location l " +
+            "where ls.product.id = :productId and l.type = :type and l.active = true")
     List<LocationStock> findByProductIdAndLocationType(@Param("productId") Long productId,
                                                        @Param("type") StorageLocationType type);
 }
