@@ -40,13 +40,13 @@ public class StorageLocationController {
         ));
     }
 
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'FRONT_DESK')")
     @GetMapping
     public ResponseEntity<CustomApiResponse<List<StorageLocationResponse>>> list() {
         return ResponseEntity.ok(CustomApiResponse.success(storageLocationService.list()));
     }
 
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'FRONT_DESK')")
     @GetMapping("/{id}")
     public ResponseEntity<CustomApiResponse<StorageLocationResponse>> get(@PathVariable Long id) {
         return ResponseEntity.ok(CustomApiResponse.success(storageLocationService.get(id)));
