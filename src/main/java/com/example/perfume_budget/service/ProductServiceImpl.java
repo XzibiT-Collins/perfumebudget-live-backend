@@ -66,7 +66,7 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     @Transactional
-    @CacheEvict(cacheNames = {"customerProductListings", "featuredProducts", "productDetailsPage"}, allEntries = true)
+    @CacheEvict(cacheNames = {"customerProductListings", "featuredProducts", "productDetailsPage", "stockRevenuePotential"}, allEntries = true)
     public ProductDetails createProduct(ProductRequest request) {
         checkIfImageIsPresentForEcommerceProduct(request);
 
@@ -257,7 +257,7 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     @Transactional
-    @CacheEvict(cacheNames = {"customerProductListings", "featuredProducts", "productDetailsPage"}, allEntries = true)
+    @CacheEvict(cacheNames = {"customerProductListings", "featuredProducts", "productDetailsPage", "stockRevenuePotential"}, allEntries = true)
     public ProductDetails updateProduct(Long productId, ProductRequest request) {
         Product productToUpdate = productRepository.findById(productId).orElseThrow(() -> new ResourceNotFoundException(PRODUCT_NOT_FOUND));
         checkIfImageIsPresentForEcommerceProductUpdate(request, productToUpdate);
@@ -267,7 +267,7 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     @Transactional
-    @CacheEvict(cacheNames = {"customerProductListings", "featuredProducts", "productDetailsPage"}, allEntries = true)
+    @CacheEvict(cacheNames = {"customerProductListings", "featuredProducts", "productDetailsPage", "stockRevenuePotential"}, allEntries = true)
     public ProductDetails setProductDiscount(Long productId, ProductDiscountRequest request) {
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new ResourceNotFoundException(PRODUCT_NOT_FOUND));
@@ -281,7 +281,7 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     @Transactional
-    @CacheEvict(cacheNames = {"customerProductListings", "featuredProducts", "productDetailsPage"}, allEntries = true)
+    @CacheEvict(cacheNames = {"customerProductListings", "featuredProducts", "productDetailsPage", "stockRevenuePotential"}, allEntries = true)
     public ProductDetails clearProductDiscount(Long productId) {
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new ResourceNotFoundException(PRODUCT_NOT_FOUND));
@@ -510,7 +510,7 @@ public class ProductServiceImpl implements ProductService {
     }
 
     @Override
-    @CacheEvict(cacheNames = {"customerProductListings", "featuredProducts", "productDetailsPage"}, allEntries = true)
+    @CacheEvict(cacheNames = {"customerProductListings", "featuredProducts", "productDetailsPage", "stockRevenuePotential"}, allEntries = true)
     public void deleteProduct(Long productId) {
         productRepository.deleteById(productId);
     }

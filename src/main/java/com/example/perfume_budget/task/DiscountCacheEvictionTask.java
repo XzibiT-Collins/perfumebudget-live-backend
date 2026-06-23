@@ -19,7 +19,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class DiscountCacheEvictionTask {
     private static final List<String> PRODUCT_CACHES =
-            List.of("customerProductListings", "featuredProducts", "productDetailsPage");
+            List.of("customerProductListings", "featuredProducts", "productDetailsPage", "stockRevenuePotential");
 
     private final CacheManager cacheManager;
 

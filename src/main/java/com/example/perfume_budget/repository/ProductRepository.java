@@ -67,5 +67,7 @@ public interface ProductRepository extends JpaRepository<Product, Long>, JpaSpec
 
     List<Product> findTop8ByIsActiveTrueAndIsEnlistedTrueAndIsFeaturedTrue();
 
+    List<Product> findAllByIsActiveTrueAndStockQuantityGreaterThan(Integer stockQuantity);
+
     Page<Product> findAllByIsActiveTrue(Specification<Product> spec, Pageable pageable);
 }

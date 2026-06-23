@@ -55,6 +55,8 @@ class AdminMetricServiceImplTest {
     private OrderItemRepository orderItemRepository;
     @Mock
     private UserRepository userRepository;
+    @Mock
+    private StockRevenuePotentialService stockRevenuePotentialService;
 
     @InjectMocks
     private AdminMetricServiceImpl adminMetricService;
@@ -131,12 +133,14 @@ class AdminMetricServiceImplTest {
         when(siteVisitRepository.countAllTimeUniqueVisitors()).thenReturn(100L);
         when(orderItemRepository.findTopProductsByRevenue(PaymentStatus.COMPLETED)).thenReturn(Collections.emptyList());
         when(orderRepository.getDailyRevenue(eq(PaymentStatus.COMPLETED), any(), any())).thenReturn(Collections.emptyList());
+        when(stockRevenuePotentialService.compute()).thenReturn(new BigDecimal("1234.56"));
 
         DashboardMetrics result = adminMetricService.getDashboardMetrics();
 
         assertNotNull(result);
         assertEquals(10, result.totalCustomers());
         assertTrue(result.totalRevenue().contains("1000.00"));
+        assertTrue(result.stockRevenuePotential().contains("1234.56"));
     }
 
     @Test
