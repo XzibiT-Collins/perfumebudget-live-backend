@@ -3,6 +3,9 @@ package com.example.perfume_budget.dto.product.response;
 import com.example.perfume_budget.dto.category.response.CategoryResponse;
 import lombok.Builder;
 
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+
 @Builder
 public record ProductDetails(
         long productId,
@@ -11,7 +14,11 @@ public record ProductDetails(
         String productDescription,
         String productImageUrl,
         CategoryResponse category,
-        String sellingPrice,
+        String sellingPrice,    // effective (discounted) price
+        String originalPrice,   // pre-discount selling price (== sellingPrice when not on sale)
+        boolean onSale,
+        BigDecimal discountPercentage,
+        LocalDateTime discountEndsAt,
         String costPrice,
         String stockKeepingUnit,
         boolean isOutOfStock,

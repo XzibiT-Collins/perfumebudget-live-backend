@@ -4,9 +4,11 @@ import com.example.perfume_budget.dto.cart.CartResponse;
 import com.example.perfume_budget.dto.cart_item.request.CartItemRequest;
 import com.example.perfume_budget.dto.cart_item.request.PopulateCartItemRequest;
 import com.example.perfume_budget.enums.CurrencyCode;
+import com.example.perfume_budget.enums.DiscountSource;
 import com.example.perfume_budget.exception.BadRequestException;
 import com.example.perfume_budget.exception.PartialSuccessException;
 import com.example.perfume_budget.model.*;
+import com.example.perfume_budget.pricing.EffectivePrice;
 import com.example.perfume_budget.repository.CartRepository;
 import com.example.perfume_budget.repository.ProductRepository;
 import com.example.perfume_budget.service.interfaces.CartItemService;
@@ -44,6 +46,8 @@ class CartServiceImplTest {
     private ProductRepository productRepository;
     @Mock
     private ApplicationEventPublisher eventPublisher;
+    @Mock
+    private EffectivePriceService effectivePriceService;
 
     @InjectMocks
     private CartServiceImpl cartService;
@@ -71,6 +75,15 @@ class CartServiceImplTest {
                 .user(testUser)
                 .items(new ArrayList<>())
                 .build();
+
+        lenient().when(effectivePriceService.activeShopDiscount()).thenReturn(Optional.empty());
+        lenient().when(effectivePriceService.now()).thenReturn(java.time.LocalDateTime.now());
+        lenient().when(effectivePriceService.compute(any(Product.class), any(), any())).thenAnswer(invocation -> {
+            Product p = invocation.getArgument(0);
+            BigDecimal amount = p.getPrice().getAmount();
+            return new EffectivePrice(amount, amount, p.getPrice().getCurrencyCode(),
+                    false, DiscountSource.NONE, null, BigDecimal.ZERO, null);
+        });
     }
 
     @Test

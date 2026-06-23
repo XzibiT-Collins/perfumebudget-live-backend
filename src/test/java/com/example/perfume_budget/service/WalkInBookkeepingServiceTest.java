@@ -128,6 +128,28 @@ class WalkInBookkeepingServiceTest {
         assertLine(lines, AccountCategory.SALES_REVENUE, EntryType.CREDIT, new BigDecimal("100.00"));
     }
 
+    @Test
+    @DisplayName("Record Walk-In Sale - Automatic (product/shop) discount books gross revenue + discount line")
+    void recordWalkInSale_WithAutomaticDiscount_Success() {
+        WalkInOrder order = createWalkInOrder(WalkInPaymentMethod.CASH, null, null);
+        // net subtotal 80, automatic discount 20 -> gross 100; tax 10; total 90
+        order.setSubtotal(new Money(new BigDecimal("80.00"), CurrencyCode.GHS));
+        order.setAutomaticDiscountAmount(new Money(new BigDecimal("20.00"), CurrencyCode.GHS));
+        order.setTotalTaxAmount(new Money(new BigDecimal("10.00"), CurrencyCode.GHS));
+        order.setTotalAmount(new Money(new BigDecimal("90.00"), CurrencyCode.GHS));
+        order.setAmountPaid(new Money(new BigDecimal("90.00"), CurrencyCode.GHS));
+
+        bookkeepingService.recordWalkInSale(order);
+
+        ArgumentCaptor<JournalEntry> captor = ArgumentCaptor.forClass(JournalEntry.class);
+        verify(journalEntryRepository).save(captor.capture());
+        List<JournalEntryLine> lines = captor.getValue().getLines();
+
+        assertLine(lines, AccountCategory.SALES_REVENUE, EntryType.CREDIT, new BigDecimal("100.00"));
+        assertLine(lines, AccountCategory.DISCOUNT_EXPENSE, EntryType.DEBIT, new BigDecimal("20.00"));
+        assertLine(lines, AccountCategory.CASH, EntryType.DEBIT, new BigDecimal("90.00"));
+    }
+
     private WalkInOrder createWalkInOrder(WalkInPaymentMethod paymentMethod, BigDecimal splitCash, BigDecimal splitMobile) {
         return WalkInOrder.builder()
                 .orderNumber("WLK-123")

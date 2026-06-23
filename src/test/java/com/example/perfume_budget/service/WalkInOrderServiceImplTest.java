@@ -11,6 +11,7 @@ import com.example.perfume_budget.enums.*;
 import com.example.perfume_budget.exception.BadRequestException;
 import com.example.perfume_budget.exception.ForbiddenException;
 import com.example.perfume_budget.model.*;
+import com.example.perfume_budget.pricing.EffectivePrice;
 import com.example.perfume_budget.repository.ProductRepository;
 import com.example.perfume_budget.repository.UserRepository;
 import com.example.perfume_budget.repository.WalkInCustomerRepository;
@@ -64,6 +65,8 @@ class WalkInOrderServiceImplTest {
     private InventoryManagementService inventoryManagementService;
     @Mock
     private FrontDeskAccessService frontDeskAccessService;
+    @Mock
+    private EffectivePriceService effectivePriceService;
 
     @InjectMocks
     private WalkInOrderServiceImpl walkInOrderService;
@@ -106,6 +109,17 @@ class WalkInOrderServiceImplTest {
                 .soldCount(1)
                 .isActive(true)
                 .build();
+
+        // By default no product/shop discount: effective price echoes the product's base price.
+        lenient().when(effectivePriceService.activeShopDiscount()).thenReturn(Optional.empty());
+        lenient().when(effectivePriceService.now()).thenReturn(LocalDateTime.now());
+        lenient().when(effectivePriceService.compute(any(Product.class), any(), any()))
+                .thenAnswer(invocation -> {
+                    Product p = invocation.getArgument(0);
+                    BigDecimal amount = p.getPrice().getAmount();
+                    return new EffectivePrice(amount, amount, p.getPrice().getCurrencyCode(),
+                            false, DiscountSource.NONE, null, BigDecimal.ZERO, null);
+                });
     }
 
     @Test

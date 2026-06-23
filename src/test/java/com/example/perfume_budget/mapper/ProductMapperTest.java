@@ -3,12 +3,15 @@ package com.example.perfume_budget.mapper;
 import com.example.perfume_budget.dto.product.response.ProductDetails;
 import com.example.perfume_budget.dto.product.response.ProductListing;
 import com.example.perfume_budget.enums.CurrencyCode;
+import com.example.perfume_budget.enums.DiscountSource;
 import com.example.perfume_budget.model.Category;
 import com.example.perfume_budget.model.Money;
 import com.example.perfume_budget.model.Product;
+import com.example.perfume_budget.pricing.EffectivePrice;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -16,6 +19,15 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ProductMapperTest {
+
+    private static EffectivePrice noSale(Product product) {
+        BigDecimal amount = product.getPrice() != null && product.getPrice().getAmount() != null
+                ? product.getPrice().getAmount().setScale(2, RoundingMode.HALF_EVEN)
+                : BigDecimal.ZERO.setScale(2, RoundingMode.HALF_EVEN);
+        CurrencyCode currency = product.getPrice() != null ? product.getPrice().getCurrencyCode() : null;
+        return new EffectivePrice(amount, amount, currency, false, DiscountSource.NONE, null,
+                BigDecimal.ZERO.setScale(2, RoundingMode.HALF_EVEN), null);
+    }
 
     @Test
     void toProductListing_MapsCategoryAndStockFlags() {
@@ -33,7 +45,7 @@ class ProductMapperTest {
                 .isEnlisted(false)
                 .build();
 
-        ProductListing response = ProductMapper.toProductListing(product);
+        ProductListing response = ProductMapper.toProductListing(product, noSale(product));
 
         assertEquals("CAT", response.categoryName());
         assertEquals(10, response.stockQuantity());
@@ -56,7 +68,7 @@ class ProductMapperTest {
                 .lowStockThreshold(2)
                 .build();
 
-        ProductDetails response = ProductMapper.toProductDetails(product);
+        ProductDetails response = ProductMapper.toProductDetails(product, noSale(product));
 
         assertEquals(5, response.soldCount());
         assertTrue(response.isOutOfStock());
@@ -70,7 +82,7 @@ class ProductMapperTest {
                 .name("P")
                 .build();
 
-        ProductDetails response = ProductMapper.toProductDetails(product);
+        ProductDetails response = ProductMapper.toProductDetails(product, noSale(product));
 
         assertNotNull(response);
         assertEquals(0L, response.productId());

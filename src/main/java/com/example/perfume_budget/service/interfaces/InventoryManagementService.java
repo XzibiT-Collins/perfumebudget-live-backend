@@ -4,6 +4,7 @@ import com.example.perfume_budget.dto.inventory.request.InventoryAdjustmentReque
 import com.example.perfume_budget.dto.inventory.request.InventoryReceiptRequest;
 import com.example.perfume_budget.dto.inventory.response.InventoryMovementResponse;
 import com.example.perfume_budget.dto.inventory.response.InventorySummaryResponse;
+import com.example.perfume_budget.dto.inventory.response.ProductStockByLocationResponse;
 import com.example.perfume_budget.enums.InventoryLayerSourceType;
 import com.example.perfume_budget.enums.InventoryReferenceType;
 import com.example.perfume_budget.model.Order;
@@ -20,6 +21,7 @@ public interface InventoryManagementService {
     InventorySummaryResponse adjustInventory(InventoryAdjustmentRequest request);
     InventorySummaryResponse getProductInventorySummary(Long productId);
     List<InventoryMovementResponse> getProductInventoryHistory(Long productId);
+    ProductStockByLocationResponse getProductStockByLocation(Long productId);
 
     Product recordOpeningStock(Product product,
                                Integer quantity,

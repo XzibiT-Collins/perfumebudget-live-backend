@@ -31,6 +31,7 @@ public class CartItemServiceImpl implements CartItemService {
     private final ProductRepository productRepository;
     private final ApplicationEventPublisher eventPublisher;
     private final CartUtil cartUtil;
+    private final EffectivePriceService effectivePriceService;
     private static final String INVALID_QUANTITY = "Quantity must be greater than 0.";
     private static final String PRODUCT_NOT_FOUND = "Product not found.";
     private static final String STOCK_QUANTITY_EXCEEDED = "Selected quantity is above the stock quantity.";
@@ -83,7 +84,7 @@ public class CartItemServiceImpl implements CartItemService {
         // Publish event to handle add to cart count
         eventPublisher.publishEvent(CartTimesEvent.builder().productId(cartItem.getProduct().getId()).build());
 
-        return CartItemMapper.toCartItemResponse(cartItem);
+        return CartItemMapper.toCartItemResponse(cartItem, effectivePriceService.compute(cartItem.getProduct()));
     }
 
     @Transactional
@@ -108,7 +109,7 @@ public class CartItemServiceImpl implements CartItemService {
 
         cartItem.setQuantity(request.quantity());
         cartItem = cartItemRepository.save(cartItem);
-        return CartItemMapper.toCartItemResponse(cartItem);
+        return CartItemMapper.toCartItemResponse(cartItem, effectivePriceService.compute(cartItem.getProduct()));
     }
 
     @Override

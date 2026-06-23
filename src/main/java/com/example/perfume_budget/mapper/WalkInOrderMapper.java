@@ -26,6 +26,8 @@ public class WalkInOrderMapper {
                 .paymentMethod(order.getPaymentMethod())
                 .status(order.getStatus())
                 .subtotal(formatMoney(order.getSubtotal().getAmount()))
+                .originalSubtotal(formatMoney(order.getSubtotal().getAmount().add(automaticDiscount(order))))
+                .automaticDiscountAmount(formatMoney(automaticDiscount(order)))
                 .discountAmount(formatMoney(order.getDiscountAmount().getAmount()))
                 .totalTaxAmount(formatMoney(order.getTotalTaxAmount().getAmount()))
                 .totalAmount(formatMoney(order.getTotalAmount().getAmount()))
@@ -77,6 +79,12 @@ public class WalkInOrderMapper {
             return order.getWalkInCustomer().getPhone();
         }
         return "N/A";
+    }
+
+    private static BigDecimal automaticDiscount(WalkInOrder order) {
+        return order.getAutomaticDiscountAmount() != null && order.getAutomaticDiscountAmount().getAmount() != null
+                ? order.getAutomaticDiscountAmount().getAmount()
+                : BigDecimal.ZERO;
     }
 
     private static String formatMoney(BigDecimal amount) {

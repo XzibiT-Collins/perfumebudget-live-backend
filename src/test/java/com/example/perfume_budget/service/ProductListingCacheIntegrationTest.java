@@ -10,6 +10,7 @@ import com.example.perfume_budget.model.Product;
 import com.example.perfume_budget.repository.CategoryRepository;
 import com.example.perfume_budget.repository.ProductFamilyRepository;
 import com.example.perfume_budget.repository.ProductRepository;
+import com.example.perfume_budget.repository.ShopWideDiscountRepository;
 import com.example.perfume_budget.repository.UnitOfMeasureRepository;
 import com.example.perfume_budget.service.interfaces.InventoryManagementService;
 import com.example.perfume_budget.service.interfaces.ProductService;
@@ -62,6 +63,8 @@ class ProductListingCacheIntegrationTest {
     private BookkeepingService bookkeepingService;
     @MockitoBean
     private InventoryManagementService inventoryManagementService;
+    @MockitoBean
+    private ShopWideDiscountRepository shopWideDiscountRepository;
 
     @Autowired
     private ProductService productService;

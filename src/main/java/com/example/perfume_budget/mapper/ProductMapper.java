@@ -6,13 +6,14 @@ import com.example.perfume_budget.dto.product.response.ProductListing;
 import com.example.perfume_budget.dto.product.response.ProductVariantSummaryResponse;
 import com.example.perfume_budget.model.Category;
 import com.example.perfume_budget.model.Product;
+import com.example.perfume_budget.pricing.EffectivePrice;
 
 public class ProductMapper {
     private ProductMapper(){
         throw new IllegalStateException("Utility class");
     }
 
-    public static ProductListing toProductListing(Product product){
+    public static ProductListing toProductListing(Product product, EffectivePrice effectivePrice){
         int stockQuantity = product.getStockQuantity() != null ? product.getStockQuantity() : 0;
         return ProductListing.builder()
                 .productId(product.getId())
@@ -20,7 +21,11 @@ public class ProductMapper {
                 .productShortDescription(product.getShortDescription())
                 .productImageUrl(product.getImageUrl())
                 .categoryName(product.getCategory() != null ? product.getCategory().getName() : "")
-                .price(product.getPrice() != null ? product.getPrice().toString() : "0.00")
+                .price(effectivePrice.effectiveDisplay())
+                .originalPrice(effectivePrice.originalDisplay())
+                .onSale(effectivePrice.onSale())
+                .discountPercentage(effectivePrice.discountPercentage())
+                .discountEndsAt(effectivePrice.endsAt())
                 .isOutOfStock(stockQuantity <= 0)
                 .isActive(Boolean.TRUE.equals(product.getIsActive()))
                 .isEnlisted(Boolean.TRUE.equals(product.getIsEnlisted()))
@@ -37,7 +42,7 @@ public class ProductMapper {
         );
     }
 
-    public static ProductDetails toProductDetails(Product product){
+    public static ProductDetails toProductDetails(Product product, EffectivePrice effectivePrice){
         Category category = product.getCategory();
         int stockQuantity = product.getStockQuantity() != null ? product.getStockQuantity() : 0;
         return ProductDetails.builder()
@@ -51,7 +56,11 @@ public class ProductMapper {
                         .categoryId(category.getId())
                         .description(category.getDescription())
                         .build(): null)
-                .sellingPrice(product.getPrice() != null ? product.getPrice().toString() : "0.00")
+                .sellingPrice(effectivePrice.effectiveDisplay())
+                .originalPrice(effectivePrice.originalDisplay())
+                .onSale(effectivePrice.onSale())
+                .discountPercentage(effectivePrice.discountPercentage())
+                .discountEndsAt(effectivePrice.endsAt())
                 .costPrice(product.getCostPrice() != null ? product.getCostPrice().toString() : "0.00")
                 .stockKeepingUnit(product.getSku())
                 .isOutOfStock(stockQuantity <= 0)
