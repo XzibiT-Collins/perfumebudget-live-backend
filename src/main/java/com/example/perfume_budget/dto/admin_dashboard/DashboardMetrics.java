@@ -9,6 +9,7 @@ import java.util.List;
 @Builder
 public record DashboardMetrics(
         String totalRevenue,
+        String stockRevenuePotential,
         OrderCountMetric orderCountMetric,
         Long totalCustomers,
         Long totalProducts,

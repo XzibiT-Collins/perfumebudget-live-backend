@@ -35,12 +35,13 @@ public class CartServiceImpl implements CartService {
     private final CartUtil cartUtil;
     private final ProductRepository productRepository;
     private final ApplicationEventPublisher eventPublisher;
+    private final EffectivePriceService effectivePriceService;
 
     @Transactional
     @Override
     public CartResponse getCart() {
         Cart myCart = cartUtil.getCurrentUserCart();
-        return CartMapper.toCartResponse(myCart);
+        return CartMapper.toCartResponse(myCart, effectivePriceService);
     }
 
     @Transactional
@@ -70,6 +71,6 @@ public class CartServiceImpl implements CartService {
         if(!failedItems.isEmpty()){
             throw new PartialSuccessException("Some items could not be added to cart", failedItems);
         }
-        return CartMapper.toCartResponse(cartUtil.getCurrentUserCart());
+        return CartMapper.toCartResponse(cartUtil.getCurrentUserCart(), effectivePriceService);
     }
 }

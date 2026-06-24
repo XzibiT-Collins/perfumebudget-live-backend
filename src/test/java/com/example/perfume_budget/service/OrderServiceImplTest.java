@@ -13,6 +13,7 @@ import com.example.perfume_budget.exception.BadRequestException;
 import com.example.perfume_budget.exception.PaymentException;
 import com.example.perfume_budget.exception.ResourceNotFoundException;
 import com.example.perfume_budget.model.*;
+import com.example.perfume_budget.pricing.EffectivePrice;
 import com.example.perfume_budget.repository.*;
 import com.example.perfume_budget.service.interfaces.InventoryManagementService;
 import com.example.perfume_budget.service.interfaces.PaymentGatewayAPIService;
@@ -71,6 +72,8 @@ class OrderServiceImplTest {
     private InventoryManagementService inventoryManagementService;
     @Mock
     private DiscountCalculationUtil discountCalculationUtil;
+    @Mock
+    private EffectivePriceService effectivePriceService;
 
     @InjectMocks
     private OrderServiceImpl orderService;
@@ -153,6 +156,17 @@ class OrderServiceImplTest {
                 .order(testOrder)
                 .build();
         testOrder.getItems().add(orderItem);
+
+        // By default no product/shop discount: effective price echoes the product's base price.
+        lenient().when(effectivePriceService.activeShopDiscount()).thenReturn(Optional.empty());
+        lenient().when(effectivePriceService.now()).thenReturn(java.time.LocalDateTime.now());
+        lenient().when(effectivePriceService.compute(any(Product.class), any(), any()))
+                .thenAnswer(invocation -> {
+                    Product p = invocation.getArgument(0);
+                    BigDecimal amount = p.getPrice().getAmount();
+                    return new EffectivePrice(amount, amount, p.getPrice().getCurrencyCode(),
+                            false, DiscountSource.NONE, null, BigDecimal.ZERO, null);
+                });
     }
 
     @Test

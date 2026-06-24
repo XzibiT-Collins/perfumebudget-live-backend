@@ -9,11 +9,15 @@ import com.example.perfume_budget.enums.*;
 import com.example.perfume_budget.exception.BadRequestException;
 import com.example.perfume_budget.exception.ResourceNotFoundException;
 import com.example.perfume_budget.model.*;
+import com.example.perfume_budget.dto.inventory.response.LocationStockLine;
+import com.example.perfume_budget.dto.inventory.response.ProductStockByLocationResponse;
 import com.example.perfume_budget.repository.InventoryAllocationRepository;
 import com.example.perfume_budget.repository.InventoryLayerRepository;
 import com.example.perfume_budget.repository.InventoryMovementRepository;
+import com.example.perfume_budget.repository.LocationStockRepository;
 import com.example.perfume_budget.repository.ProductRepository;
 import com.example.perfume_budget.service.interfaces.InventoryManagementService;
+import com.example.perfume_budget.service.interfaces.LocationLedgerSync;
 import com.example.perfume_budget.utils.AuthUserUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -38,12 +42,15 @@ public class InventoryManagementServiceImpl implements InventoryManagementServic
     private final InventoryLayerRepository inventoryLayerRepository;
     private final InventoryAllocationRepository inventoryAllocationRepository;
     private final InventoryMovementRepository inventoryMovementRepository;
+    private final LocationStockRepository locationStockRepository;
     private final AuthUserUtil authUserUtil;
     private final BookkeepingService bookkeepingService;
+    private final LocationLedgerSync locationLedgerSync;
 
     @Override
     @Transactional
 //    @CacheEvict(cacheNames = {"customerProductListings", "featuredProducts", "productDetailsPage"}, allEntries = true)
+    @CacheEvict(cacheNames = "stockRevenuePotential", allEntries = true)
     public InventorySummaryResponse receiveStock(InventoryReceiptRequest request) {
         Product product = getProduct(request.productId());
         validatePositiveAmounts(request.unitCost(), request.unitSellingPrice());
@@ -72,6 +79,7 @@ public class InventoryManagementServiceImpl implements InventoryManagementServic
     @Override
     @Transactional
 //    @CacheEvict(cacheNames = {"customerProductListings", "featuredProducts", "productDetailsPage"}, allEntries = true)
+    @CacheEvict(cacheNames = "stockRevenuePotential", allEntries = true)
     public InventorySummaryResponse adjustInventory(InventoryAdjustmentRequest request) {
         Product product = getProduct(request.productId());
         return switch (request.direction()) {
@@ -99,8 +107,39 @@ public class InventoryManagementServiceImpl implements InventoryManagementServic
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public ProductStockByLocationResponse getProductStockByLocation(Long productId) {
+        Product product = getProduct(productId);
+        List<LocationStockLine> locations = locationStockRepository.findByProductIdWithLocation(productId).stream()
+                .map(ls -> new LocationStockLine(
+                        ls.getLocation().getId(),
+                        ls.getLocation().getName(),
+                        ls.getLocation().getType().name(),
+                        ls.getQuantityOnHand()))
+                .toList();
+
+        int sumOfLocations = locations.stream().mapToInt(LocationStockLine::quantityOnHand).sum();
+        int outstandingReserved = inventoryAllocationRepository.sumReservedQuantityByProductId(productId);
+        int globalStock = product.getStockQuantity() != null ? product.getStockQuantity() : 0;
+
+        // Outstanding reservations have already left global stock but not the physical ledger —
+        // a tolerated delta, not drift (ADR-002).
+        boolean balancesMatchGlobal = sumOfLocations == globalStock + outstandingReserved;
+
+        return new ProductStockByLocationResponse(
+                product.getId(),
+                product.getName(),
+                globalStock,
+                outstandingReserved,
+                locations,
+                balancesMatchGlobal
+        );
+    }
+
+    @Override
     @Transactional
 //    @CacheEvict(cacheNames = {"customerProductListings", "featuredProducts", "productDetailsPage"}, allEntries = true)
+    @CacheEvict(cacheNames = "stockRevenuePotential", allEntries = true)
     public Product recordOpeningStock(Product product,
                                       Integer quantity,
                                       BigDecimal unitCost,
@@ -136,6 +175,7 @@ public class InventoryManagementServiceImpl implements InventoryManagementServic
     @Override
     @Transactional
 //    @CacheEvict(cacheNames = {"customerProductListings", "featuredProducts", "productDetailsPage"}, allEntries = true)
+    @CacheEvict(cacheNames = "stockRevenuePotential", allEntries = true)
     public void reserveOrderInventory(String orderNumber, List<OrderItem> orderItems) {
         for (OrderItem item : orderItems) {
             consumeInventory(getProduct(item.getProductId()),
@@ -150,7 +190,7 @@ public class InventoryManagementServiceImpl implements InventoryManagementServic
 
     @Override
     @Transactional
-    @CacheEvict(cacheNames = {"customerProductListings", "featuredProducts", "productDetailsPage"}, allEntries = true)
+    @CacheEvict(cacheNames = {"customerProductListings", "featuredProducts", "productDetailsPage", "stockRevenuePotential"}, allEntries = true)
     public void releaseOrderInventory(String orderNumber) {
         List<InventoryAllocation> allocations = inventoryAllocationRepository
                 .findByReferenceTypeAndReferenceIdAndStatusOrderByIdAsc(
@@ -181,7 +221,7 @@ public class InventoryManagementServiceImpl implements InventoryManagementServic
 
     @Override
     @Transactional
-    @CacheEvict(cacheNames = {"customerProductListings", "featuredProducts", "productDetailsPage"}, allEntries = true)
+    @CacheEvict(cacheNames = {"customerProductListings", "featuredProducts", "productDetailsPage", "stockRevenuePotential"}, allEntries = true)
     public void finalizeReservedOrder(Order order) {
         List<InventoryAllocation> allocations = inventoryAllocationRepository
                 .findByReferenceTypeAndReferenceIdAndStatusOrderByIdAsc(
@@ -192,10 +232,14 @@ public class InventoryManagementServiceImpl implements InventoryManagementServic
 
         Map<String, BigDecimal> totalCostByLine = new LinkedHashMap<>();
         Map<String, Integer> quantityByLine = new LinkedHashMap<>();
+        Map<Long, Product> productById = new LinkedHashMap<>();
+        Map<Long, Integer> quantityByProduct = new LinkedHashMap<>();
 
         allocations.forEach(allocation -> {
             allocation.setStatus(InventoryAllocationStatus.CONSUMED);
             inventoryAllocationRepository.save(allocation);
+            productById.putIfAbsent(allocation.getProduct().getId(), allocation.getProduct());
+            quantityByProduct.merge(allocation.getProduct().getId(), allocation.getQuantity(), Integer::sum);
             recordMovement(allocation.getProduct(),
                     allocation.getLayer(),
                     InventoryMovementType.SALE,
@@ -222,12 +266,16 @@ public class InventoryManagementServiceImpl implements InventoryManagementServic
             }
         }
 
+        quantityByProduct.forEach((productId, consumedQuantity) ->
+                locationLedgerSync.deductForEcommerceSale(productById.get(productId), consumedQuantity,
+                        "Fulfilled order " + order.getOrderNumber()));
+
         refreshProducts(order.getItems().stream().map(OrderItem::getProductId).distinct().toList());
     }
 
     @Override
     @Transactional
-    @CacheEvict(cacheNames = {"customerProductListings", "featuredProducts", "productDetailsPage"}, allEntries = true)
+    @CacheEvict(cacheNames = {"customerProductListings", "featuredProducts", "productDetailsPage", "stockRevenuePotential"}, allEntries = true)
     public void consumeWalkInInventory(String orderNumber, List<WalkInOrderItem> items) {
         for (WalkInOrderItem item : items) {
             InventoryConsumption consumption = consumeInventory(getProduct(item.getProductId()),
@@ -244,7 +292,7 @@ public class InventoryManagementServiceImpl implements InventoryManagementServic
 
     @Override
     @Transactional
-    @CacheEvict(cacheNames = {"customerProductListings", "featuredProducts", "productDetailsPage"}, allEntries = true)
+    @CacheEvict(cacheNames = {"customerProductListings", "featuredProducts", "productDetailsPage", "stockRevenuePotential"}, allEntries = true)
     public InventoryConsumption consumeInventory(Product product,
                                                  int quantity,
                                                  InventoryReferenceType referenceType,
@@ -305,13 +353,21 @@ public class InventoryManagementServiceImpl implements InventoryManagementServic
             throw new BadRequestException("Insufficient stock for: " + product.getName());
         }
 
+        // Location ledger only moves on physical exits; reservations stay global-only (ADR-002).
+        if (!createReservation) {
+            switch (referenceType) {
+                case ADJUSTMENT, CONVERSION -> locationLedgerSync.deductAtDefaultReceiving(product, quantity, note);
+                default -> locationLedgerSync.deductForWalkInSale(product, quantity, note);
+            }
+        }
+
         refreshProductInventoryState(product);
         return new InventoryConsumption(lines, scale(totalCost));
     }
 
     @Override
     @Transactional
-    @CacheEvict(cacheNames = {"customerProductListings", "featuredProducts", "productDetailsPage"}, allEntries = true)
+    @CacheEvict(cacheNames = {"customerProductListings", "featuredProducts", "productDetailsPage", "stockRevenuePotential"}, allEntries = true)
     public Product createConversionLayer(Product product,
                                          int quantity,
                                          BigDecimal unitCost,
@@ -402,6 +458,10 @@ public class InventoryManagementServiceImpl implements InventoryManagementServic
 
         recordMovement(product, layer, movementType, referenceType, referenceId, referenceLineKey, quantity,
                 layer.getUnitCost(), layer.getUnitSellingPrice(), note);
+
+        locationLedgerSync.increaseAtDefaultReceiving(product, quantity,
+                movementType == InventoryMovementType.RECEIPT ? StockTransferType.RECEIPT : StockTransferType.ADJUSTMENT,
+                note);
         return refreshProductInventoryState(product);
     }
 

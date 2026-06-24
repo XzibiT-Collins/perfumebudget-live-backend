@@ -45,6 +45,13 @@ public class Order {
     @AttributeOverride(name = "currencyCode", column = @Column(name = "discount_amount_currency"))
     private Money discountAmount;
 
+    // Product-specific + shop-wide discount baked into the effective subtotal.
+    // subtotal is NET of this; gross subtotal = subtotal + automaticDiscountAmount.
+    @Embedded
+    @AttributeOverride(name = "amount", column = @Column(name = "automatic_discount_amount"))
+    @AttributeOverride(name = "currencyCode", column = @Column(name = "automatic_discount_currency"))
+    private Money automaticDiscountAmount;
+
     @Column(nullable = false)
     @Embedded
     @AttributeOverride(name = "amount", column = @Column(name = "total_amount"))

@@ -2,7 +2,9 @@ package com.example.perfume_budget.mapper;
 
 import com.example.perfume_budget.dto.order_item.OrderItemResponse;
 import com.example.perfume_budget.enums.CurrencyCode;
+import com.example.perfume_budget.enums.DiscountSource;
 import com.example.perfume_budget.model.*;
+import com.example.perfume_budget.pricing.EffectivePrice;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -31,8 +33,10 @@ class OrderItemMapperTest {
         Product product = Product.builder().id(1L).name("P").sku("S").price(new Money(BigDecimal.TEN, CurrencyCode.USD)).build();
         CartItem cartItem = CartItem.builder().product(product).quantity(3).build();
         Order order = new Order();
+        EffectivePrice effectivePrice = new EffectivePrice(
+                BigDecimal.TEN, BigDecimal.TEN, CurrencyCode.USD, false, DiscountSource.NONE, null, BigDecimal.ZERO, null);
 
-        OrderItem result = OrderItemMapper.toOrderItem(cartItem, order);
+        OrderItem result = OrderItemMapper.toOrderItem(cartItem, order, effectivePrice);
 
         assertNotNull(result);
         assertEquals(1L, result.getProductId());
@@ -43,6 +47,6 @@ class OrderItemMapperTest {
 
     @Test
     void toOrderItem_NullCartItem_ThrowsException() {
-        assertThrows(NullPointerException.class, () -> OrderItemMapper.toOrderItem(null, new Order()));
+        assertThrows(NullPointerException.class, () -> OrderItemMapper.toOrderItem(null, new Order(), null));
     }
 }

@@ -19,12 +19,14 @@ import com.example.perfume_budget.exception.ResourceNotFoundException;
 import com.example.perfume_budget.mapper.WalkInOrderMapper;
 import com.example.perfume_budget.model.Money;
 import com.example.perfume_budget.model.Product;
+import com.example.perfume_budget.model.ShopWideDiscount;
 import com.example.perfume_budget.model.User;
 import com.example.perfume_budget.model.WalkInCustomer;
 import com.example.perfume_budget.model.WalkInOrder;
 import com.example.perfume_budget.model.WalkInOrderItem;
 import com.example.perfume_budget.model.WalkInOrderTax;
 import com.example.perfume_budget.model.OrderTax;
+import com.example.perfume_budget.pricing.EffectivePrice;
 import com.example.perfume_budget.repository.ProductRepository;
 import com.example.perfume_budget.repository.UserRepository;
 import com.example.perfume_budget.repository.WalkInCustomerRepository;
@@ -68,12 +70,19 @@ public class WalkInOrderServiceImpl implements WalkInOrderService {
     private final BookkeepingService bookkeepingService;
     private final InventoryManagementService inventoryManagementService;
     private final FrontDeskAccessService frontDeskAccessService;
+    private final EffectivePriceService effectivePriceService;
 
     @Override
     public WalkInOrderResponse placeWalkInOrder(WalkInOrderRequest request) {
         User currentUser = requireWalkInAccess(FrontDeskPermission.WALK_IN_ORDER_CREATE);
         CustomerResolution customerResolution = resolveCustomer(request);
-        List<WalkInOrderItem> orderItems = buildOrderItems(request.items());
+        WalkInItemsResult itemsResult = buildOrderItems(request.items());
+        List<WalkInOrderItem> orderItems = itemsResult.items();
+
+        // No stacking: a manual discount cannot be applied when items are already on sale.
+        if (itemsResult.anyOnSale() && (request.discountType() != null || request.discountValue() != null)) {
+            throw new BadRequestException("Manual discount cannot be combined with active product discounts.");
+        }
 
         BigDecimal subtotal = orderItems.stream()
                 .map(WalkInOrderItem::getTotalPrice)
@@ -95,6 +104,7 @@ public class WalkInOrderServiceImpl implements WalkInOrderService {
                 .processedBy(currentUser)
                 .subtotal(new Money(subtotal, CurrencyCode.GHS))
                 .discountAmount(new Money(discountAmount, CurrencyCode.GHS))
+                .automaticDiscountAmount(new Money(itemsResult.automaticDiscount(), CurrencyCode.GHS))
                 .totalTaxAmount(new Money(taxResult.totalTaxAmount().getAmount(), CurrencyCode.GHS))
                 .totalAmount(new Money(totalAmount, CurrencyCode.GHS))
                 .amountPaid(new Money(paymentValidation.amountPaid(), CurrencyCode.GHS))
@@ -218,8 +228,14 @@ public class WalkInOrderServiceImpl implements WalkInOrderService {
                 .build();
     }
 
-    private List<WalkInOrderItem> buildOrderItems(List<WalkInOrderItemRequest> items) {
+    private WalkInItemsResult buildOrderItems(List<WalkInOrderItemRequest> items) {
+        // Resolve effective (discounted) prices once for the whole order.
+        ShopWideDiscount activeShop = effectivePriceService.activeShopDiscount().orElse(null);
+        LocalDateTime pricingTime = effectivePriceService.now();
+
         List<WalkInOrderItem> orderItems = new ArrayList<>();
+        boolean anyOnSale = false;
+        BigDecimal automaticDiscount = BigDecimal.ZERO;
         for (WalkInOrderItemRequest itemRequest : items) {
             Product product = productRepository.findById(itemRequest.productId())
                     .orElseThrow(() -> new ResourceNotFoundException("Product not found with id: " + itemRequest.productId()));
@@ -230,8 +246,16 @@ public class WalkInOrderServiceImpl implements WalkInOrderService {
             if (product.getStockQuantity() < itemRequest.quantity()) {
                 throw new BadRequestException("Insufficient stock for: " + product.getName());
             }
-            BigDecimal unitPrice = scale(product.getPrice().getAmount());
-            BigDecimal totalPrice = scale(unitPrice.multiply(BigDecimal.valueOf(itemRequest.quantity())));
+
+            EffectivePrice effectivePrice = effectivePriceService.compute(product, activeShop, pricingTime);
+            if (effectivePrice.onSale()) {
+                anyOnSale = true;
+            }
+            BigDecimal quantity = BigDecimal.valueOf(itemRequest.quantity());
+            BigDecimal unitPrice = scale(effectivePrice.effectiveAmount());
+            BigDecimal totalPrice = scale(unitPrice.multiply(quantity));
+            automaticDiscount = automaticDiscount.add(
+                    effectivePrice.originalAmount().subtract(effectivePrice.effectiveAmount()).multiply(quantity));
 
             orderItems.add(WalkInOrderItem.builder()
                     .productId(product.getId())
@@ -243,7 +267,7 @@ public class WalkInOrderServiceImpl implements WalkInOrderService {
                     .totalPrice(totalPrice)
                     .build());
         }
-        return orderItems;
+        return new WalkInItemsResult(orderItems, anyOnSale, scale(automaticDiscount));
     }
 
     private DiscountApplication applyWalkInDiscount(DiscountType discountType,
@@ -360,5 +384,8 @@ public class WalkInOrderServiceImpl implements WalkInOrderService {
                                        BigDecimal discountValue,
                                        BigDecimal discountAmount,
                                        BigDecimal finalPrice) {
+    }
+
+    private record WalkInItemsResult(List<WalkInOrderItem> items, boolean anyOnSale, BigDecimal automaticDiscount) {
     }
 }

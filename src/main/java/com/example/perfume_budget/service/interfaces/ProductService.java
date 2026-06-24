@@ -1,6 +1,7 @@
 package com.example.perfume_budget.service.interfaces;
 
 import com.example.perfume_budget.dto.PageResponse;
+import com.example.perfume_budget.dto.product.request.ProductDiscountRequest;
 import com.example.perfume_budget.dto.product.request.ProductRequest;
 import com.example.perfume_budget.dto.product.response.ProductDetails;
 import com.example.perfume_budget.dto.product.response.ProductDetailsPageResponse;
@@ -22,5 +23,7 @@ public interface ProductService {
     ProductDetails getProductDetails(Long productId);
     ProductDetailsPageResponse getProductDetailsPage(String slug);
     ProductDetails updateProduct(Long productId, ProductRequest request);
+    ProductDetails setProductDiscount(Long productId, ProductDiscountRequest request);
+    ProductDetails clearProductDiscount(Long productId);
     void deleteProduct(Long productId);
 }

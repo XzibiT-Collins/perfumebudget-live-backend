@@ -8,5 +8,6 @@ import java.util.List;
 @Builder
 public record CartResponse(
         List<CartItemResponse> cartItems,
-        String totalPrice
+        String totalPrice,          // effective (discounted) total
+        String originalTotalPrice   // pre-discount total (== totalPrice when nothing on sale)
 ){}

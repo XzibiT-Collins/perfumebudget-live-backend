@@ -14,8 +14,10 @@ import java.util.List;
 public record OrderResponse(
         Long orderId,
         String orderNumber,
-        String subtotal,
-        String discountAmount,
+        String subtotal,              // net of automatic (product/shop) discount
+        String originalSubtotal,      // gross, before automatic discount
+        String automaticDiscountAmount, // product/shop discount baked into subtotal
+        String discountAmount,        // coupon discount
         String totalAmount,
         PaymentStatus paymentStatus,
         OrderProcessingStatus deliveryStatus,

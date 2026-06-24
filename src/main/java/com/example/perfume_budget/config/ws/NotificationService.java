@@ -90,4 +90,69 @@ public class NotificationService {
             notificationRecipientRepository.saveAll(deliveredRecipients);
         }
     }
+
+    @Transactional
+    public void notifyStaffOfShopFloorShortage(Long productId, String productName, int floorQuantity, int storeRoomQuantity) {
+        // Throttle: one open alert per product until someone reads it.
+        if (notificationRecipientRepository.existsByNotificationTypeAndNotificationReferenceIdAndIsReadFalse(
+                "SHOP_FLOOR_RESTOCK", productId.toString())) {
+            log.info("Unread shop floor restock alert already exists for product {}; skipping.", productId);
+            return;
+        }
+
+        List<User> staffUsers = userRepository.findAllByRolesIn(List.of(UserRole.ADMIN, UserRole.FRONT_DESK));
+        if (staffUsers.isEmpty()) {
+            log.info("No staff users found to persist shop floor restock notification for product {}", productId);
+            return;
+        }
+
+        Notification notification = notificationRepository.save(
+                Notification.builder()
+                        .type("SHOP_FLOOR_RESTOCK")
+                        .title("Shop floor restock needed")
+                        .message(productName + " is low on the shop floor (" + floorQuantity
+                                + " left). " + storeRoomQuantity + " unit(s) available in store rooms.")
+                        .referenceType("PRODUCT")
+                        .referenceId(productId.toString())
+                        .build()
+        );
+
+        List<NotificationRecipient> recipients = new ArrayList<>();
+        for (User staffUser : staffUsers) {
+            recipients.add(NotificationRecipient.builder()
+                    .notification(notification)
+                    .user(staffUser)
+                    .isRead(false)
+                    .build());
+        }
+        List<NotificationRecipient> savedRecipients = notificationRecipientRepository.saveAll(recipients);
+
+        log.info("Persisted shop floor restock notification {} for {} staff recipients.", notification.getId(), savedRecipients.size());
+
+        Set<String> connectedAdmins = adminSessionManager.getConnectedAdmins();
+        if (connectedAdmins.isEmpty()) {
+            return;
+        }
+
+        LocalDateTime deliveredAt = LocalDateTime.now();
+        List<NotificationRecipient> deliveredRecipients = new ArrayList<>();
+        for (NotificationRecipient recipient : savedRecipients) {
+            String staffUsername = recipient.getUser().getEmail();
+            if (!connectedAdmins.contains(staffUsername)) {
+                continue;
+            }
+
+            recipient.setDeliveredAt(deliveredAt);
+            messagingTemplate.convertAndSendToUser(
+                    staffUsername,
+                    "/queue/notifications",
+                    NotificationMapper.toWebSocketBody(recipient)
+            );
+            deliveredRecipients.add(recipient);
+        }
+
+        if (!deliveredRecipients.isEmpty()) {
+            notificationRecipientRepository.saveAll(deliveredRecipients);
+        }
+    }
 }

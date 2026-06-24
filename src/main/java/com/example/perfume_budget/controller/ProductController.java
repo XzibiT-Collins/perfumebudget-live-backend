@@ -2,6 +2,7 @@ package com.example.perfume_budget.controller;
 
 import com.example.perfume_budget.dto.CustomApiResponse;
 import com.example.perfume_budget.dto.PageResponse;
+import com.example.perfume_budget.dto.product.request.ProductDiscountRequest;
 import com.example.perfume_budget.dto.product.request.ProductRequest;
 import com.example.perfume_budget.dto.product.response.ProductDetails;
 import com.example.perfume_budget.dto.product.response.ProductDetailsPageResponse;
@@ -80,6 +81,20 @@ public class ProductController {
     @GetMapping("/main/{productId}")
     public ResponseEntity<CustomApiResponse<ProductDetails>> getProductDetails(@PathVariable Long productId){
         return ResponseEntity.ok().body(CustomApiResponse.success(productService.getProductDetails(productId)));
+    }
+
+    @PreAuthorize("hasRole('ADMIN')")
+    @PutMapping("/admin/{productId}/discount")
+    public ResponseEntity<CustomApiResponse<ProductDetails>> setProductDiscount(
+            @PathVariable Long productId,
+            @Valid @RequestBody ProductDiscountRequest request){
+        return ResponseEntity.ok().body(CustomApiResponse.success(productService.setProductDiscount(productId, request)));
+    }
+
+    @PreAuthorize("hasRole('ADMIN')")
+    @DeleteMapping("/admin/{productId}/discount")
+    public ResponseEntity<CustomApiResponse<ProductDetails>> clearProductDiscount(@PathVariable Long productId){
+        return ResponseEntity.ok().body(CustomApiResponse.success(productService.clearProductDiscount(productId)));
     }
 
     @PreAuthorize("hasRole('ADMIN')")

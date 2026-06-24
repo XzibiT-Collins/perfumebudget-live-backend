@@ -69,6 +69,7 @@ public class AdminMetricServiceImpl implements AdminMetricService {
     private final UserRepository userRepository;
     private final JournalEntryRepository journalEntryRepository;
     private final WalkInOrderRepository walkInOrderRepository;
+    private final StockRevenuePotentialService stockRevenuePotentialService;
 
     @Override
     public PageResponse<CustomerDataResponse> getCustomers(Pageable pageable) {
@@ -165,6 +166,7 @@ public class AdminMetricServiceImpl implements AdminMetricService {
                 .totalProducts(totalProducts)
                 .totalSiteVisits(totalSiteVisitsCount)
                 .totalRevenue(new Money(allTotalRevenue, CurrencyCode.GHS).toString())
+                .stockRevenuePotential(new Money(stockRevenuePotentialService.compute(), CurrencyCode.GHS).toString())
                 .top5Compositions(top5Compositions)
                 .dailyRevenueMetric(dailyRevenueMetrics)
                 .build();

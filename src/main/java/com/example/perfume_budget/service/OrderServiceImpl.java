@@ -15,6 +15,7 @@ import com.example.perfume_budget.exception.ResourceNotFoundException;
 import com.example.perfume_budget.mapper.OrderItemMapper;
 import com.example.perfume_budget.mapper.OrderMapper;
 import com.example.perfume_budget.model.*;
+import com.example.perfume_budget.pricing.EffectivePrice;
 import com.example.perfume_budget.repository.*;
 import com.example.perfume_budget.service.interfaces.InventoryManagementService;
 import com.example.perfume_budget.service.interfaces.OrderService;
@@ -55,7 +56,9 @@ public class OrderServiceImpl implements OrderService {
     private final TaxService taxService;
     private final InventoryManagementService inventoryManagementService;
     private final DiscountCalculationUtil discountCalculationUtil;
+    private final EffectivePriceService effectivePriceService;
     private static final String INVALID_COUPON_CODE = "Invalid coupon code.";
+    private static final String COUPON_WITH_DISCOUNT = "Coupons cannot be combined with active product discounts.";
     private static final String ORDER_NOT_FOUND = "Order not found.";
     private static final String EMPTY_CART = "Cart is empty, add items and try again.";
     private static final String PRODUCT_UNAVAILABLE = "One or more products in your cart are no longer available for ecommerce purchase.";
@@ -74,14 +77,30 @@ public class OrderServiceImpl implements OrderService {
 
         validateCartItemsForEcommerce(cart);
 
-        BigDecimal orderSubtotal = cart.getItems().stream()
-                .map(cartItem -> cartItem.getProduct().getPrice().getAmount()
-                        .multiply(BigDecimal.valueOf(cartItem.getQuantity())))
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        // Resolve effective (discounted) prices once for the whole cart.
+        ShopWideDiscount activeShop = effectivePriceService.activeShopDiscount().orElse(null);
+        LocalDateTime pricingTime = effectivePriceService.now();
+
+        BigDecimal orderSubtotal = BigDecimal.ZERO;
+        BigDecimal automaticDiscount = BigDecimal.ZERO;
+        boolean anyItemOnSale = false;
+        for (CartItem cartItem : cart.getItems()) {
+            EffectivePrice effectivePrice = effectivePriceService.compute(cartItem.getProduct(), activeShop, pricingTime);
+            if (effectivePrice.onSale()) {
+                anyItemOnSale = true;
+            }
+            BigDecimal quantity = BigDecimal.valueOf(cartItem.getQuantity());
+            orderSubtotal = orderSubtotal.add(effectivePrice.effectiveAmount().multiply(quantity));
+            automaticDiscount = automaticDiscount.add(
+                    effectivePrice.originalAmount().subtract(effectivePrice.effectiveAmount()).multiply(quantity));
+        }
 
         Coupon coupon = null;
         BigDecimal finalPrice = orderSubtotal;
         if (couponCode != null) {
+            if (anyItemOnSale) {
+                throw new BadRequestException(COUPON_WITH_DISCOUNT);
+            }
             coupon = couponRepository.findByCode(couponCode.strip().toUpperCase())
                     .orElseThrow(() -> new BadRequestException(INVALID_COUPON_CODE));
             discountCalculationUtil.checkIfCouponIsValid(coupon);
@@ -96,6 +115,7 @@ public class OrderServiceImpl implements OrderService {
                 .user(currentUser)
                 .subtotal(new Money(orderSubtotal, CurrencyCode.GHS))
                 .discountAmount(new Money(discountAmount, CurrencyCode.GHS))
+                .automaticDiscountAmount(new Money(automaticDiscount, CurrencyCode.GHS))
                 .totalTaxAmount(taxCalculationResult.totalTaxAmount())
                 .totalAmount(taxCalculationResult.totalAmountAfterTax())
                 .status(PaymentStatus.PENDING)
@@ -103,7 +123,7 @@ public class OrderServiceImpl implements OrderService {
                 .coupon(coupon)
                 .build();
 
-        newOrder.setItems(createOrderItems(cart, newOrder));
+        newOrder.setItems(createOrderItems(cart, newOrder, activeShop, pricingTime));
         Order finalNewOrder = newOrder;
         taxCalculationResult.orderTaxes().forEach(tax-> tax.setOrder(finalNewOrder));
         newOrder.setTaxes(new ArrayList<>(taxCalculationResult.orderTaxes()));
@@ -252,9 +272,10 @@ public class OrderServiceImpl implements OrderService {
         return order;
     }
 
-    private List<OrderItem> createOrderItems(Cart cart, Order newOrder) {
+    private List<OrderItem> createOrderItems(Cart cart, Order newOrder, ShopWideDiscount activeShop, LocalDateTime pricingTime) {
     return cart.getItems().stream()
-            .map(item -> OrderItemMapper.toOrderItem(item, newOrder))
+            .map(item -> OrderItemMapper.toOrderItem(item, newOrder,
+                    effectivePriceService.compute(item.getProduct(), activeShop, pricingTime)))
             .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
 }
 

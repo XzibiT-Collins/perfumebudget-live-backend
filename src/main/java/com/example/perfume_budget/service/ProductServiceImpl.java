@@ -1,15 +1,18 @@
 package com.example.perfume_budget.service;
 
 import com.example.perfume_budget.dto.PageResponse;
+import com.example.perfume_budget.dto.product.request.ProductDiscountRequest;
 import com.example.perfume_budget.dto.product.request.ProductRequest;
 import com.example.perfume_budget.dto.product.response.ProductDetails;
 import com.example.perfume_budget.dto.product.response.ProductDetailsPageResponse;
 import com.example.perfume_budget.dto.product.response.ProductListing;
+import com.example.perfume_budget.enums.DiscountType;
 import com.example.perfume_budget.enums.UserRole;
 import com.example.perfume_budget.events.ViewCountEvent;
 import com.example.perfume_budget.exception.ResourceNotFoundException;
 import com.example.perfume_budget.mapper.ProductMapper;
 import com.example.perfume_budget.model.*;
+import com.example.perfume_budget.pricing.EffectivePrice;
 import com.example.perfume_budget.repository.CategoryRepository;
 import com.example.perfume_budget.repository.ProductFamilyRepository;
 import com.example.perfume_budget.repository.ProductRepository;
@@ -36,9 +39,11 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.Supplier;
 
 @Slf4j
@@ -57,10 +62,11 @@ public class ProductServiceImpl implements ProductService {
     private final BookkeepingService bookkeepingService;
     private final InventoryManagementService inventoryManagementService;
     private final ProductCatalogCacheService productCatalogCacheService;
+    private final EffectivePriceService effectivePriceService;
 
     @Override
     @Transactional
-    @CacheEvict(cacheNames = {"customerProductListings", "featuredProducts", "productDetailsPage"}, allEntries = true)
+    @CacheEvict(cacheNames = {"customerProductListings", "featuredProducts", "productDetailsPage", "stockRevenuePotential"}, allEntries = true)
     public ProductDetails createProduct(ProductRequest request) {
         checkIfImageIsPresentForEcommerceProduct(request);
 
@@ -124,7 +130,7 @@ public class ProductServiceImpl implements ProductService {
                     "OPENING-" + savedProduct.getId(),
                     "Opening stock for " + savedProduct.getName()
             );
-            return ProductMapper.toProductDetails(savedProduct);
+            return toDetails(savedProduct);
 
         } else {
             // SCENARIO 2: Add Variant to Existing Family
@@ -170,7 +176,7 @@ public class ProductServiceImpl implements ProductService {
                     "OPENING-" + savedProduct.getId(),
                     "Opening stock for " + savedProduct.getName()
             );
-            return ProductMapper.toProductDetails(savedProduct);
+            return toDetails(savedProduct);
         }
     }
 
@@ -206,20 +212,20 @@ public class ProductServiceImpl implements ProductService {
     public PageResponse<ProductListing> getProductListings(Pageable pageable) {
         log.info("Cache miss: customerProductListings");
         Page<ProductListing> productListings = productRepository.findAllByIsActiveTrueAndIsEnlistedTrue(pageable)
-                .map(ProductMapper::toProductListing);
+                .map(listingMapper());
         return PaginationUtil.createPageResponse(productListings);
     }
 
     @Override
     public PageResponse<ProductListing> searchProducts(Long categoryId, String searchTerm, Pageable pageable) {
         Specification<Product> spec = ProductSpecification.filterProducts(categoryId, searchTerm);
-        Page<ProductListing> productListings = productRepository.findAll(spec, pageable).map(ProductMapper::toProductListing);
+        Page<ProductListing> productListings = productRepository.findAll(spec, pageable).map(listingMapper());
         return PaginationUtil.createPageResponse(productListings);
     }
 
     @Override
     public PageResponse<ProductListing> getAdminProductListings(Pageable pageable) {
-        Page<ProductListing> productListings = productRepository.findAll(pageable).map(ProductMapper::toProductListing);
+        Page<ProductListing> productListings = productRepository.findAll(pageable).map(listingMapper());
         return PaginationUtil.createPageResponse(productListings);
     }
 
@@ -231,7 +237,7 @@ public class ProductServiceImpl implements ProductService {
     @Override
     public PageResponse<ProductListing> searchAdminProducts(Long categoryId, String searchTerm, Pageable pageable) {
         Specification<Product> spec = ProductSpecification.filterProductsForAdmin(categoryId, searchTerm);
-        Page<ProductListing> productListings = productRepository.findAll(spec, pageable).map(ProductMapper::toProductListing);
+        Page<ProductListing> productListings = productRepository.findAll(spec, pageable).map(listingMapper());
         return PaginationUtil.createPageResponse(productListings);
     }
 
@@ -239,7 +245,7 @@ public class ProductServiceImpl implements ProductService {
     public ProductDetails getProductDetails(Long productId) {
         log.info("Product details requested");
         Product product = productRepository.findById(productId).orElseThrow(() -> new ResourceNotFoundException(PRODUCT_NOT_FOUND));
-        return ProductMapper.toProductDetails(product);
+        return toDetails(product);
     }
 
     @Override
@@ -251,12 +257,67 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     @Transactional
-    @CacheEvict(cacheNames = {"customerProductListings", "featuredProducts", "productDetailsPage"}, allEntries = true)
+    @CacheEvict(cacheNames = {"customerProductListings", "featuredProducts", "productDetailsPage", "stockRevenuePotential"}, allEntries = true)
     public ProductDetails updateProduct(Long productId, ProductRequest request) {
         Product productToUpdate = productRepository.findById(productId).orElseThrow(() -> new ResourceNotFoundException(PRODUCT_NOT_FOUND));
         checkIfImageIsPresentForEcommerceProductUpdate(request, productToUpdate);
         Product updatedProduct = checkAndUpdateProductFields(productToUpdate, request);
-        return ProductMapper.toProductDetails(updatedProduct);
+        return toDetails(updatedProduct);
+    }
+
+    @Override
+    @Transactional
+    @CacheEvict(cacheNames = {"customerProductListings", "featuredProducts", "productDetailsPage", "stockRevenuePotential"}, allEntries = true)
+    public ProductDetails setProductDiscount(Long productId, ProductDiscountRequest request) {
+        Product product = productRepository.findById(productId)
+                .orElseThrow(() -> new ResourceNotFoundException(PRODUCT_NOT_FOUND));
+        validateProductDiscount(product, request);
+        product.setDiscountType(request.discountType());
+        product.setDiscountValue(request.discountValue());
+        product.setDiscountStartAt(request.startAt());
+        product.setDiscountEndAt(request.endAt());
+        return toDetails(productRepository.save(product));
+    }
+
+    @Override
+    @Transactional
+    @CacheEvict(cacheNames = {"customerProductListings", "featuredProducts", "productDetailsPage", "stockRevenuePotential"}, allEntries = true)
+    public ProductDetails clearProductDiscount(Long productId) {
+        Product product = productRepository.findById(productId)
+                .orElseThrow(() -> new ResourceNotFoundException(PRODUCT_NOT_FOUND));
+        product.setDiscountType(null);
+        product.setDiscountValue(null);
+        product.setDiscountStartAt(null);
+        product.setDiscountEndAt(null);
+        return toDetails(productRepository.save(product));
+    }
+
+    private void validateProductDiscount(Product product, ProductDiscountRequest request) {
+        if (!request.endAt().isAfter(request.startAt())) {
+            throw new BadRequestException("Discount end date must be after the start date.");
+        }
+        if (request.discountType() == DiscountType.PERCENTAGE
+                && request.discountValue().compareTo(BigDecimal.valueOf(100)) > 0) {
+            throw new BadRequestException("Percentage discount cannot exceed 100.");
+        }
+        if (request.discountType() == DiscountType.FLAT) {
+            BigDecimal price = product.getPrice() != null && product.getPrice().getAmount() != null
+                    ? product.getPrice().getAmount() : BigDecimal.ZERO;
+            if (request.discountValue().compareTo(price) >= 0) {
+                throw new BadRequestException("Flat discount must be less than the product price.");
+            }
+        }
+    }
+
+    private Function<Product, ProductListing> listingMapper() {
+        ShopWideDiscount shop = effectivePriceService.activeShopDiscount().orElse(null);
+        LocalDateTime now = effectivePriceService.now();
+        return product -> ProductMapper.toProductListing(product, effectivePriceService.compute(product, shop, now));
+    }
+
+    private ProductDetails toDetails(Product product) {
+        EffectivePrice effectivePrice = effectivePriceService.compute(product);
+        return ProductMapper.toProductDetails(product, effectivePrice);
     }
 
     private void checkIfImageIsPresentForEcommerceProductUpdate(ProductRequest request, Product productToUpdate) {
@@ -449,7 +510,7 @@ public class ProductServiceImpl implements ProductService {
     }
 
     @Override
-    @CacheEvict(cacheNames = {"customerProductListings", "featuredProducts", "productDetailsPage"}, allEntries = true)
+    @CacheEvict(cacheNames = {"customerProductListings", "featuredProducts", "productDetailsPage", "stockRevenuePotential"}, allEntries = true)
     public void deleteProduct(Long productId) {
         productRepository.deleteById(productId);
     }

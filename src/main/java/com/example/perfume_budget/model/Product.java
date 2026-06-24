@@ -1,5 +1,6 @@
 package com.example.perfume_budget.model;
 
+import com.example.perfume_budget.enums.DiscountType;
 import jakarta.persistence.*;
 import lombok.*;
 import org.springframework.data.annotation.CreatedDate;
@@ -59,6 +60,20 @@ public class Product {
     @AttributeOverride(name = "amount", column = @Column(name = "cost_price_amount"))
     @AttributeOverride(name = "currencyCode", column = @Column(name = "cost_price_currency"))
     private Money costPrice;
+
+    // ----- Product-specific discount (nullable; active only within [discountStartAt, discountEndAt]) -----
+    @Enumerated(EnumType.STRING)
+    @Column(name = "discount_type", length = 20)
+    private DiscountType discountType;
+
+    @Column(name = "discount_value", precision = 19, scale = 2)
+    private BigDecimal discountValue; // percentage (0-100) when PERCENTAGE, flat amount when FLAT
+
+    @Column(name = "discount_start_at")
+    private LocalDateTime discountStartAt;
+
+    @Column(name = "discount_end_at")
+    private LocalDateTime discountEndAt;
 
     @Column(nullable = false)
     private Integer stockQuantity;
