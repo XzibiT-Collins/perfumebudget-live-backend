@@ -28,8 +28,6 @@
 	</scm>
 	<properties>
 		<java.version>21</java.version>
-		<aws.sdk.version>2.26.0</aws.sdk.version>
-		<spring.aws.version>3.1.1</spring.aws.version>
 		<jwt.version>0.12.6</jwt.version>
 		<spotbugs.version>4.8.3</spotbugs.version>
 		<bucket4j.version>8.16.0</bucket4j.version>
